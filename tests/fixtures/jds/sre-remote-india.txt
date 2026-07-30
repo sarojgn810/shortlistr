@@ -1,0 +1,14 @@
+Senior Site Reliability Engineer — Remote (India)
+
+We are looking for a Senior SRE to join our platform team. You will own
+reliability for Kubernetes clusters, observability stacks (Prometheus, Grafana),
+and incident response. 5+ years experience with Linux, Terraform, and on-call.
+
+Requirements:
+- Kubernetes, Docker, CI/CD
+- Prometheus, Grafana, Datadog or similar
+- Python or Go for automation
+- On-call rotation experience
+
+Location: Remote — India
+Compensation: competitive

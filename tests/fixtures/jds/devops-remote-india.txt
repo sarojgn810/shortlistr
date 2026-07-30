@@ -1,0 +1,3 @@
+Senior DevOps Engineer — Remote India.
+Kubernetes, Terraform, CI/CD pipelines, on-call rotation.
+5+ years production experience required.

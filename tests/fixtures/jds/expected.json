@@ -1,0 +1,7 @@
+{
+  "sre-remote-india.txt": {"min_score": 3.0, "max_score": 5.0, "legitimacy": ["verified", "likely", "uncertain"]},
+  "junior-marketing-onsite.txt": {"min_score": 0.0, "max_score": 3.5, "legitimacy": ["verified", "likely", "uncertain", "suspicious"]},
+  "platform-remote-global.txt": {"min_score": 3.0, "max_score": 5.0, "legitimacy": ["verified", "likely", "uncertain"]},
+  "devops-remote-india.txt": {"min_score": 3.0, "max_score": 5.0, "legitimacy": ["verified", "likely", "uncertain"]},
+  "admin-onsite-mumbai.txt": {"min_score": 0.0, "max_score": 3.5, "legitimacy": ["verified", "likely", "uncertain", "suspicious"]}
+}
