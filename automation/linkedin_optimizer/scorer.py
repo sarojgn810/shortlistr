@@ -16,6 +16,12 @@ _GENERIC = {
     "passionate", "synergy", "rockstar", "ninja", "guru", "driven professional",
     "hard worker", "team player", "results-oriented", "self-starter",
 }
+try:
+    from writing.policy import LOCAL_FLUFF
+
+    _GENERIC = set(_GENERIC) | set(LOCAL_FLUFF)
+except Exception:
+    pass
 
 
 def _norm(text: str) -> str:

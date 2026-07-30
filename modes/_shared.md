@@ -136,7 +136,9 @@ After detecting archetype, read `modes/_profile.md` for the user's specific fram
 
 ## Professional Writing & ATS Compatibility
 
-These rules apply to ALL generated text that ends up in candidate-facing documents: PDF summaries, bullets, cover letters, form answers, LinkedIn messages. They do NOT apply to internal evaluation reports.
+These rules apply to ALL generated text that ends up in candidate-facing documents: PDF summaries, bullets, cover letters, form answers, LinkedIn messages. Internal evaluation reports should still stay concrete and free of banned fluff in block strings.
+
+Runtime enforcement lives in `automation/writing/` (sanitize + style prompts). That layer improves clarity — it does **not** claim detector evasion or “no AI traces.”
 
 ### Avoid cliché phrases
 - "passionate about" / "results-oriented" / "proven track record"
@@ -146,6 +148,7 @@ These rules apply to ALL generated text that ends up in candidate-facing documen
 - "synergies" / "robust" / "seamless" / "cutting-edge" / "innovative"
 - "in today's fast-paced world"
 - "demonstrated ability to" / "best practices" (name the practice)
+- Also ban: delve, utilize, empower, streamline, paradigm, tapestry, elevate, harness, and throat-clearing openers ("Here's the thing", "What nobody tells you")
 
 ### Unicode normalization for ATS
 `automation/generate_pdf.py` automatically normalizes em-dashes, smart quotes, and zero-width characters to ASCII equivalents for maximum ATS compatibility. But avoid generating them in the first place.

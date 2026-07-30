@@ -145,10 +145,10 @@ def test_skills_only_adds_evidenced_keywords():
 
 
 def test_normalize_linkedin_url():
-    assert normalize_linkedin_url("linkedin.com/in/saroj810") == (
-        "https://www.linkedin.com/in/saroj810"
+    assert normalize_linkedin_url("linkedin.com/in/exampleuser") == (
+        "https://www.linkedin.com/in/exampleuser"
     )
-    assert normalize_linkedin_url("saroj810") == "https://www.linkedin.com/in/saroj810"
+    assert normalize_linkedin_url("exampleuser") == "https://www.linkedin.com/in/exampleuser"
     assert normalize_linkedin_url("") == ""
 
 

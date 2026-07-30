@@ -122,11 +122,11 @@ def _template_bullets(job: dict, cv_md: str) -> list[str]:
             titles = list(_cfg.SEARCH_KEYWORDS or [])[:2]
         except Exception:
             pass
-        focus = ", ".join(titles) if titles else "the areas this role emphasises"
+        focus = ", ".join(titles) if titles else "the skills listed in this role"
         bullets = [
-            "• A track record of delivering measurable results in roles like this one.",
-            f"• Background aligned with {focus}.",
-            "• Clear communication, ownership, and a bias for shipping.",
+            f"• Experience delivering work that maps to {focus}.",
+            "• Ownership of shipping and operating systems end to end.",
+            "• Clear written communication with async teams.",
         ]
     return bullets[:3]
 
@@ -175,7 +175,9 @@ def _llm_letter(job: dict, llm) -> str:
 
     contact_block = "\n".join(x for x in [name, phone, email, linkedin, github] if x)
 
-    system = (
+    from writing.style import with_style
+
+    system = with_style(
         "You are a professional cover letter writer. "
         "Write concise, confident, and specific letters. "
         "No fluff. No clichés. The letter should read like it was written by the candidate, not a recruiter."
@@ -207,7 +209,19 @@ Do not include a subject line. Do not use generic phrases like "I am a highly mo
 """
 
     try:
-        return llm.complete(prompt, system=system, max_tokens=600)
+        from writing.sanitize import sanitize
+        from writing.self_check import self_check
+
+        raw = llm.complete(prompt, system=system, max_tokens=600)
+        cleaned = sanitize(raw or "", mode="prose")
+        check = self_check(cleaned)
+        if not cleaned.strip() or (not check["ok"] and len(check["hits"]) >= 3):
+            logger.warning(
+                "LLM cover letter failed style check (%s) — falling back to template",
+                check.get("hits"),
+            )
+            return _template_letter(job)
+        return cleaned
     except Exception as e:
         logger.warning(f"LLM cover letter failed ({e}) — falling back to template")
         return _template_letter(job)
@@ -230,6 +244,8 @@ def generate_cover_letter(job: dict) -> dict:
     except Exception:
         llm = None
 
+    from writing.sanitize import sanitize
+
     if llm and llm.is_available():
         body = _llm_letter(job, llm)
         mode = "llm"
@@ -237,7 +253,8 @@ def generate_cover_letter(job: dict) -> dict:
         body = _template_letter(job)
         mode = "template"
 
-    subject = generate_subject(job)
+    body = sanitize(body, mode="prose")
+    subject = sanitize(generate_subject(job), mode="label")
     return {"subject": subject, "body": body, "mode": mode}
 
 

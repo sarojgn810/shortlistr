@@ -210,6 +210,8 @@ make test             # python test suite (pytest over tests/)
 python3 -m pytest tests/test_discovery.py -q       # single test file (from repo root)
 python3 -m pytest tests/test_discovery.py -q -k name  # single test by name
 make reset            # blank-slate reset (backs up user data, keeps .env/portals.yml)
+make uninstall        # remove Shortlistr (keychain/crons/build); then delete the folder
+                      # ARGS=--purge-data also wipes résumé/profile/DB/.env
 cd dashboard && npx tsc --noEmit   # frontend type check
 cd dashboard && npx next lint      # frontend lint
 ```

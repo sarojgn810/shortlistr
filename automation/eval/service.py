@@ -309,6 +309,12 @@ def evaluate_job_text(
 
     system = _load_prompt()
     try:
+        from writing.style import with_style
+
+        system = with_style(system)
+    except Exception:
+        pass
+    try:
         from outcomes.adapt import learnings_prompt_block
 
         signals = learnings_prompt_block()
@@ -350,6 +356,15 @@ def evaluate_job_text(
     else:
         eval_mode = "template"
         data = _heuristic_eval(jd_text, company=company, role=role, url=url, cv_text=cv)
+
+    # Sanitize block prose only — leave score / legitimacy / company / role intact.
+    try:
+        from writing.sanitize import sanitize_blocks
+
+        if isinstance(data.get("blocks"), dict):
+            data["blocks"] = sanitize_blocks(data["blocks"], mode="prose")
+    except Exception:
+        pass
 
     result = EvalResult(
         score=_safe_float(data.get("score")),

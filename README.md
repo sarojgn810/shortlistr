@@ -93,9 +93,12 @@ make test                # pytest
 make doctor              # environment check
 make scan                # portal scanner
 make apply-assist ARGS="JOB_ID=..."
+make uninstall           # remove Shortlistr (see GETTING_STARTED §7)
 ```
 
 Day-to-day setup belongs in the dashboard **Connections** page.
+
+To wipe only your data and onboard again: `make reset`. To remove the app entirely: `make uninstall`, then delete the project folder — full steps in [GETTING_STARTED.md](GETTING_STARTED.md#7-uninstall--remove-shortlistr-completely).
 
 ---
 

@@ -107,12 +107,88 @@ onboard fresh.
 
 ---
 
-## 7. Troubleshooting
+## 7. Uninstall / remove Shortlistr completely
+
+Use this when you want Shortlistr **off the machine**, not just a blank profile.
+
+### Guided cleanup (recommended)
+
+From the project folder:
+
+```bash
+# Stop local servers, remove cron hooks, clear Shortlistr keychain secrets,
+# and remove node_modules / build caches. Then prints the final steps.
+make uninstall
+
+# Same, but also delete résumé, profile, DB, .env, portals.yml, and backups
+# (cannot undo — only do this if you do not need that data):
+make uninstall ARGS=--purge-data
+```
+
+Windows (PowerShell), from the project folder:
+
+```powershell
+python -m automation.cli uninstall
+python -m automation.cli uninstall --purge-data
+```
+
+### Final step — delete the app folder
+
+After `make uninstall` finishes, remove the repository itself:
+
+```bash
+# macOS / Linux — run from the PARENT of the project folder
+cd ..
+rm -rf shortlistr    # or whatever you named the clone
+```
+
+```powershell
+# Windows — from the parent folder
+Remove-Item -Recurse -Force .\shortlistr
+```
+
+### Optional extras (only if you installed them for Shortlistr)
+
+```bash
+# Playwright Chromium (shared browser cache)
+python3 -m playwright uninstall chromium
+
+# Cron jobs (if you ever ran the ingest cron installer)
+bash scripts/setup-job-crons.sh --remove
+
+# Local AI models pulled via Ollama (list first, then remove what you want)
+ollama list
+ollama rm <model-name>
+```
+
+Python / Node themselves can stay — Shortlistr does not require uninstalling them.
+Pip packages from `automation/requirements.txt` are optional to remove:
+
+```bash
+pip3 uninstall -y -r automation/requirements.txt
+```
+
+(Run that **before** deleting the folder, or keep a copy of `requirements.txt`.)
+
+### What gets removed vs kept
+
+| Removed by `make uninstall` | Kept until you delete the folder | Optional / manual |
+|-----------------------------|----------------------------------|-------------------|
+| Processes on `:3000` / `:8787` | Code + templates | Playwright Chromium cache |
+| Shortlistr crontab lines | `cv.md`, profile, DB (unless `--purge-data`) | Ollama models |
+| OS keychain secrets (`shortlistr` service) | `.env` / `portals.yml` (unless `--purge-data`) | System Python / Node |
+| `dashboard/node_modules`, `.next` | | |
+
+Nothing is uploaded. After you delete the folder, Shortlistr is gone.
+
+---
+
+## 8. Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
 | Dashboard loads but data is empty | Start the API: `make api`. |
-| PDF won't download | Run `make install` (needs Playwright/Chromium), then regenerate. |
+| PDF won't download | Open **Connections** and install Playwright, then regenerate. |
 | Evaluations say "template mode" | Add an LLM key in **Connections**, then re-evaluate. |
 | Apply-assist can't find the form | Open the posting, click Apply, then retry. |
 | No jobs after discovery | Switch the inbox to **All**, or widen target titles in **Profile**. |

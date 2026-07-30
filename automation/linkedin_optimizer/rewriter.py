@@ -27,6 +27,23 @@ _FLUFF = {
 }
 
 
+def _sanitize_suggested(text: str) -> str:
+    try:
+        from writing.sanitize import sanitize
+
+        return sanitize(text or "", mode="prose")
+    except Exception:
+        return text or ""
+
+
+def _finalize_rewrite(result: dict[str, Any]) -> dict[str, Any]:
+    if result.get("suggested"):
+        result["suggested"] = _sanitize_suggested(str(result["suggested"]))
+    if result.get("rationale"):
+        result["rationale"] = _sanitize_suggested(str(result["rationale"]))
+    return result
+
+
 def _seniority_prefix(text: str, role: dict) -> str:
     t = (text or "").lower()
     for s in ("principal", "staff", "senior", "lead"):
@@ -112,14 +129,14 @@ def rewrite_headline(profile: dict[str, Any], role_id: str) -> dict[str, Any]:
     if missing:
         rationale += f" Still missing for search (add only if true): {', '.join(missing)}."
 
-    return {
+    return _finalize_rewrite({
         "section": "headline",
         "original": original,
         "suggested": suggested[:220],
         "rationale": rationale,
         "mode": "heuristic",
         "recommended_keywords": missing,
-    }
+    })
 
 
 def rewrite_about(profile: dict[str, Any], role_id: str) -> dict[str, Any]:
@@ -127,7 +144,7 @@ def rewrite_about(profile: dict[str, Any], role_id: str) -> dict[str, Any]:
     original = (profile.get("about") or "").strip()
     corpus = corpus_text(profile)
     if not original:
-        return {
+        return _finalize_rewrite({
             "section": "about",
             "original": "",
             "suggested": "",
@@ -138,7 +155,7 @@ def rewrite_about(profile: dict[str, Any], role_id: str) -> dict[str, Any]:
             "mode": "heuristic",
             "error": "empty_about",
             "recommended_keywords": _keywords_missing(corpus, role["must_keywords"])[:8],
-        }
+        })
 
     cleaned = original
     for fluff in _FLUFF:
@@ -210,14 +227,14 @@ def rewrite_about(profile: dict[str, Any], role_id: str) -> dict[str, Any]:
             f"{', '.join(missing)}."
         )
 
-    return {
+    return _finalize_rewrite({
         "section": "about",
         "original": original,
         "suggested": suggested,
         "rationale": rationale,
         "mode": "heuristic",
         "recommended_keywords": missing,
-    }
+    })
 
 
 def _rewrite_bullet(bullet: str, role: dict) -> tuple[str, str | None]:
@@ -248,7 +265,7 @@ def rewrite_experience(profile: dict[str, Any], role_id: str) -> dict[str, Any]:
     role = get_role(role_id)
     original_jobs = profile.get("experience") or []
     if not original_jobs:
-        return {
+        return _finalize_rewrite({
             "section": "experience",
             "original": "",
             "suggested": "",
@@ -259,7 +276,7 @@ def rewrite_experience(profile: dict[str, Any], role_id: str) -> dict[str, Any]:
             ),
             "mode": "heuristic",
             "error": "empty_experience",
-        }
+        })
 
     notes: list[str] = []
     suggested_jobs = []
@@ -294,7 +311,7 @@ def rewrite_experience(profile: dict[str, Any], role_id: str) -> dict[str, Any]:
     if notes:
         rationale += " Notes: " + " ".join(notes[:6])
 
-    return {
+    return _finalize_rewrite({
         "section": "experience",
         "original": fmt(original_jobs),
         "suggested": fmt(suggested_jobs),
@@ -302,7 +319,7 @@ def rewrite_experience(profile: dict[str, Any], role_id: str) -> dict[str, Any]:
         "rationale": rationale,
         "mode": "heuristic",
         "notes": notes,
-    }
+    })
 
 
 def rewrite_skills(profile: dict[str, Any], role_id: str) -> dict[str, Any]:
@@ -328,7 +345,7 @@ def rewrite_skills(profile: dict[str, Any], role_id: str) -> dict[str, Any]:
             ordered.append(s)
     suggested = ordered[:20]
 
-    return {
+    return _finalize_rewrite({
         "section": "skills",
         "original": ", ".join(original),
         "suggested": ", ".join(suggested),
@@ -344,7 +361,7 @@ def rewrite_skills(profile: dict[str, Any], role_id: str) -> dict[str, Any]:
         ),
         "mode": "heuristic",
         "recommended_keywords": recommended,
-    }
+    })
 
 
 def rewrite_open_to_work(profile: dict[str, Any], role_id: str) -> dict[str, Any]:
@@ -366,13 +383,13 @@ def rewrite_open_to_work(profile: dict[str, Any], role_id: str) -> dict[str, Any
         f"Locations: {loc}\n"
         f"Job types: Full-time"
     )
-    return {
+    return _finalize_rewrite({
         "section": "open_to_work",
         "original": original,
         "suggested": suggested,
         "rationale": "Uses titles already on your profile/résumé and your stated location.",
         "mode": "heuristic",
-    }
+    })
 
 
 def rewrite_featured(profile: dict[str, Any], role_id: str) -> dict[str, Any]:
@@ -389,13 +406,13 @@ def rewrite_featured(profile: dict[str, Any], role_id: str) -> dict[str, Any]:
             "repo, or dashboard screenshot (redact secrets). Do not invent items."
         )
         rationale = "Refused to invent Featured items — paste real project links."
-    return {
+    return _finalize_rewrite({
         "section": "featured",
         "original": original,
         "suggested": suggested,
         "rationale": rationale,
         "mode": "heuristic",
-    }
+    })
 
 
 def rewrite_section(section: str, profile: dict[str, Any], role_id: str) -> dict[str, Any]:
@@ -427,12 +444,15 @@ def maybe_llm_polish(
     """Optional polish. Must not invent facts. Falls back to draft."""
     try:
         from llm import get_llm
+        from writing.sanitize import sanitize
+        from writing.self_check import invents_unsupported_tokens, self_check
+        from writing.style import with_style
 
         llm = get_llm()
         if not llm or not llm.is_available():
             return draft, "heuristic"
         role = get_role(role_id)
-        system = (
+        system = with_style(
             "You improve LinkedIn profile copy. HARD RULES: keep every fact grounded in "
             "the evidence; do not invent employers, metrics, skills, or projects; do not "
             "add keywords that are not supported by evidence; stay human and credible. "
@@ -447,6 +467,11 @@ def maybe_llm_polish(
         out = (llm.complete(prompt, system=system, max_tokens=900) or "").strip()
         if len(out) < 20:
             return draft, "heuristic"
-        return out, "llm"
+        cleaned = sanitize(out, mode="prose")
+        invented = invents_unsupported_tokens(cleaned, evidence + "\n" + (draft or ""))
+        check = self_check(cleaned)
+        if invented or (not check["ok"] and len(check["hits"]) >= 3):
+            return draft, "heuristic"
+        return cleaned, "llm"
     except Exception:
         return draft, "heuristic"

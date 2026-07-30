@@ -364,7 +364,12 @@ Best,
 LinkedIn: {CANDIDATE['linkedin']}
 GitHub:   {CANDIDATE['github']}
 """
-    return draft
+    try:
+        from writing.sanitize import sanitize
+
+        return sanitize(draft, mode="prose")
+    except Exception:
+        return draft
 
 
 def _save_recruiter_draft(sender: str, subject: str, draft: str):

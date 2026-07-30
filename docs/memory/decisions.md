@@ -13,6 +13,20 @@ Template:
 
 ---
 
+## 2026-07-30 — Writing quality layer (not detector evasion)
+**Decision:** Add `automation/writing/` (policy, sanitize, style prompts,
+self_check) and wire it per call site for cover letters, LinkedIn
+rewrites/polish, eval A–G *block strings*, interview prep, chat *answer*
+text, fit reasons (label mode), recruiter reply drafts, and
+`modes/_shared.md`. Do **not** wrap `LLMProvider.complete()` globally —
+that would corrupt eval JSON and chat tool-call JSON.
+**Why:** Generated copy was accumulating banned fluff and throat-clearing even
+in offline templates. Named pattern cleanup makes drafts more concrete without
+claiming watermark stripping, classifier defeat, or “no AI traces.”
+**Touches:** `automation/writing/`, cover_letter, linkedin_optimizer/rewriter,
+eval/service + prompts, generate_prep, agent/chat, job_filter, email_monitor,
+eval/explain, modes/_shared.md, `tests/test_writing_quality.py`.
+
 ---
 
 ## 2026-07-30 — LinkedIn Profile Optimizer is copy-only + heuristic-first

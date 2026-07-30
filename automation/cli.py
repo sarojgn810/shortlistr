@@ -27,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
             "Commands: doctor, verify, normalize, normalize-pipeline, dedup, merge,\n"
             "          pdf, sync-check, liveness, scan, resolve-url, status, tracker,\n"
             "          migrate-markdown, export-pipeline, export-applications, bundle, worker, seed, reset,\n"
-            "          api, start, dev, scheduler, evaluate, explain, diff, inbox, resolve-jobs,\n"
+            "          uninstall, api, start, dev, scheduler, evaluate, explain, diff, inbox, resolve-jobs,\n"
             "          apply-assist, email-routing, ingest, jobs-sweep, test\n"
         )
         return 0
@@ -156,6 +156,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "reset":
         from bootstrap.reset import main as run
         return run()
+    if cmd == "uninstall":
+        from bootstrap.uninstall import main as run
+        return run(rest)
     if cmd == "migrate-job-ids":
         from store.migrate_job_ids import main as run
         return run()

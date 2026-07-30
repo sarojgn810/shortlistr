@@ -1,4 +1,4 @@
-.PHONY: doctor verify normalize normalize-pipeline dedup merge pdf sync-check liveness scan test install status tracker migrate-markdown export-pipeline export-applications bundle worker api explain diff resolve-jobs apply-assist email-routing dev start seed reset
+.PHONY: doctor verify normalize normalize-pipeline dedup merge pdf sync-check liveness scan test install status tracker migrate-markdown export-pipeline export-applications bundle worker api explain diff resolve-jobs apply-assist email-routing dev start seed reset uninstall
 
 PYTHON ?= python3
 CLI := $(PYTHON) -m automation.cli
@@ -98,6 +98,12 @@ seed:
 # slate for fresh onboarding. Secrets (.env / keychain) and portals.yml are kept.
 reset:
 	$(CLI) reset
+
+# Remove Shortlistr from this machine (stops ports, clears keychain + crons,
+# prints steps to delete the folder). Use ARGS=--purge-data to also wipe
+# résumé / profile / DB / .env before you delete the repo.
+uninstall:
+	$(CLI) uninstall $(ARGS)
 
 # One command (any OS): install deps, seed files, start stack, open /onboarding
 start:

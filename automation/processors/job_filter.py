@@ -266,7 +266,14 @@ def score_job(job: dict) -> dict:
         pass
 
     job["fit_score"] = min(score, 100)
-    job["fit_reason"] = "; ".join(reasons) if reasons else "basic title match"
+    reason = "; ".join(reasons) if reasons else "basic title match"
+    try:
+        from writing.sanitize import sanitize
+
+        reason = sanitize(reason, mode="label")
+    except Exception:
+        pass
+    job["fit_reason"] = reason
     return job
 
 

@@ -18,3 +18,9 @@ Return ONLY valid JSON (no markdown fences) with this structure:
 }
 
 Be honest. Score below 4.0 if not a strong fit. Cite specific JD requirements in blocks.
+
+Writing style for block strings:
+- Concrete and specific — name tools, requirements, and numbers from the JD/CV.
+- Active voice. No banned fluff (leverage, utilize, robust, cutting-edge, passionate, delve, synergy…).
+- No throat-clearing, binary contrasts ("It's not X. It's Y."), or summary-recap endings.
+- Do not invent employers, metrics, or skills absent from the CV/JD.

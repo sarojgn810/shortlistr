@@ -347,7 +347,7 @@ def _build_prep_doc(job: dict, cv_md: str) -> str:
 
         lines += [
             f"**Q: {question}**",
-            f"> 💡 {hint}",
+            f"> {hint}",
             "",
             "**My answer:**",
             "- Situation:",
@@ -392,6 +392,12 @@ def generate_prep_for_job(job: dict) -> dict:
             cv_md = f.read()
 
     content  = _build_prep_doc(job, cv_md)
+    try:
+        from writing.sanitize import sanitize
+
+        content = sanitize(content, mode="prose")
+    except Exception:
+        pass
     company  = re.sub(r'[^\w\s-]', '', job.get("company", "Company")).strip().replace(" ", "_")
     role     = re.sub(r'[^\w\s-]', '', job.get("title", "SRE")).strip().replace(" ", "_")
     date_str = datetime.now().strftime("%Y-%m-%d")

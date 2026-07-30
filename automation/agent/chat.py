@@ -37,15 +37,31 @@ def _memory_block(tenant_id: str) -> str:
 
 
 def _system_prompt(tenant_id: str) -> str:
-    return (
+    base = (
         "You are shortlistr's assistant. You help the user run their job search and can call tools.\n"
         "Reply with EXACTLY ONE JSON object per turn, nothing else:\n"
         '  {"action":"answer","text":"..."}  — to reply to the user\n'
         '  {"action":"call_tool","tool":"<name>","args":{...}}  — to run a tool\n'
         "Use tools to fetch facts before answering. For submit-class tools, still emit "
-        "call_tool; the system will ask the user to confirm before running them.\n\n"
+        "call_tool; the system will ask the user to confirm before running them.\n"
+        "When action is answer, keep text concrete and direct — no fluff or banned filler phrases.\n\n"
         f"Available tools:\n{_tool_catalog()}{_memory_block(tenant_id)}"
     )
+    try:
+        from writing.style import with_style
+
+        return with_style(base)
+    except Exception:
+        return base
+
+
+def _sanitize_reply(text: str) -> str:
+    try:
+        from writing.sanitize import sanitize
+
+        return sanitize(text or "", mode="prose")
+    except Exception:
+        return text or ""
 
 
 def _parse_action(raw: str) -> dict:
@@ -101,7 +117,7 @@ def chat(
         action = _parse_action(raw)
 
         if action["action"] == "answer":
-            return {"reply": action.get("text", ""), "actions": actions}
+            return {"reply": _sanitize_reply(action.get("text", "")), "actions": actions}
 
         if action["action"] == "call_tool":
             name = action.get("tool", "")
@@ -112,7 +128,9 @@ def chat(
                 continue
             if tool.side_effect == registry.SUBMIT:
                 return {
-                    "reply": action.get("text") or "This needs your confirmation.",
+                    "reply": _sanitize_reply(
+                        action.get("text") or "This needs your confirmation."
+                    ),
                     "pending_confirm": {"tool": name, "args": args, "prompt": _confirm_prompt(name, args)},
                     "actions": actions,
                 }
@@ -124,7 +142,7 @@ def chat(
             convo += f"\nObservation from {name}: {json.dumps(result)[:1200]}\n"
             continue
 
-        return {"reply": action.get("text", raw[:500]), "actions": actions}
+        return {"reply": _sanitize_reply(action.get("text", raw[:500])), "actions": actions}
 
     return {"reply": "Stopped after several steps without a final answer.", "actions": actions}
 
@@ -166,8 +184,8 @@ def _fallback(message: str, tenant_id: str) -> dict:
     return {
         "reply": (
             "AI helper is not set up, so I can only run a few commands: "
-            "**status**, **inbox**, **discover**, **pipeline**, or **prep**.\n\n"
-            "For full chat, open **Connections** and add an AI provider + key."
+            "status, inbox, discover, pipeline, or prep.\n\n"
+            "For full chat, open Connections and add an AI provider + key."
         ),
         "actions": [],
     }

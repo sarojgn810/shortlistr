@@ -80,6 +80,12 @@ def explain_job(job_id: str) -> dict[str, Any]:
             seen.add(key)
             unique_bullets.append(b)
     unique_bullets = unique_bullets[:5]
+    try:
+        from writing.sanitize import sanitize
+
+        unique_bullets = [sanitize(b, mode="prose") for b in unique_bullets]
+    except Exception:
+        pass
 
     primary_score = eval_score if eval_score is not None else round(fit_score / 20.0, 1)
 
@@ -90,6 +96,12 @@ def explain_job(job_id: str) -> dict[str, Any]:
         summary_parts.append(f"discovery fit {fit_score}/100")
     summary_parts.append(f"legitimacy: {legitimacy}")
     summary = " · ".join(summary_parts)
+    try:
+        from writing.sanitize import sanitize
+
+        summary = sanitize(summary, mode="label")
+    except Exception:
+        pass
 
     return {
         "job_id": jid,
@@ -124,4 +136,10 @@ def format_explain_text(data: dict[str, Any]) -> str:
     if not data.get("bullets"):
         lines.append("  • (no explainer data — run evaluate first)")
     lines.append(f"\nURL: {data.get('url', '')}")
-    return "\n".join(lines)
+    text = "\n".join(lines)
+    try:
+        from writing.sanitize import sanitize
+
+        return sanitize(text, mode="label")
+    except Exception:
+        return text
