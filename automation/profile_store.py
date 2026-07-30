@@ -197,6 +197,18 @@ def save_profile_from_ui(body: dict[str, Any]) -> dict[str, Any]:
     # platforms emails are owned by the Connections page — keep them unless this
     # save explicitly includes new values (first-run seed uses the candidate email).
     existing = _load_yaml(PROFILE_PATH) if os.path.isfile(PROFILE_PATH) else {}
+    existing_filters = existing.get("filters") if isinstance(existing.get("filters"), dict) else {}
+
+    def _norm(values: Any) -> list[str]:
+        if isinstance(values, str):
+            values = [values]
+        return sorted(str(v).strip().lower() for v in (values or []) if str(v).strip())
+
+    targeting_changed = (
+        _norm(existing_filters.get("target_titles")) != _norm(titles)
+        or _norm(existing_filters.get("preferred_locations")) != _norm(locations)
+    )
+
     preserve_keys = ("sources", "discovery", "mcp_servers")
     preserved = {k: existing[k] for k in preserve_keys if k in existing and existing[k]}
 
@@ -299,6 +311,17 @@ scoring:
         reload_discovery_config()
     except Exception:
         pass
+
+    # Jobs already in the DB carry the verdict of whatever targeting was live
+    # when they were discovered — which, for a first run, is the field-neutral
+    # default. Without this they stay hidden from Discover until the same
+    # posting happens to be re-scraped.
+    if targeting_changed:
+        try:
+            from orchestrator.discovery import retag_existing_jobs
+            retag_existing_jobs()
+        except Exception:
+            pass
 
     return get_profile_for_ui()
 

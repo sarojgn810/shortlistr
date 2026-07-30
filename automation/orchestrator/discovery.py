@@ -6,7 +6,7 @@ import logging
 import time
 
 from models.job import JobRecord
-from pipeline.filter import apply_discovery_filter
+from pipeline.filter import apply_discovery_filter, passes_title_location
 from processors.job_filter import score_job
 from sources.circuit import record_failure, record_success
 from sources.registry import get_registry
@@ -153,6 +153,71 @@ def discover_and_filter(
         "scored": total_scored,
     }
     return all_passed, all_rejected, source_stats
+
+
+def retag_existing_jobs(limit: int = 5000) -> dict:
+    """Re-judge already-stored jobs against the current profile targeting.
+
+    Relevance and fit are stamped once, at discovery time. Anything scanned
+    before the user finished onboarding therefore keeps the default targeting's
+    verdict forever: the rows stay tagged off_target with fit 0, so Discover is
+    empty while Settings reports thousands of saved jobs. A targeting change has
+    to re-judge what is already in the DB, not just the next scan's results.
+    """
+    import json
+
+    store.init_db()
+    updated = 0
+    relevant = 0
+    with store.db() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, url, title, location, source, salary, jd_text, metadata_json
+            FROM jobs
+            WHERE source != 'eval' AND archived_at IS NULL
+            ORDER BY discovered_at DESC, updated_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        for row in rows:
+            try:
+                meta = json.loads(row["metadata_json"] or "{}")
+            except (TypeError, ValueError):
+                meta = {}
+            if not isinstance(meta, dict):
+                meta = {}
+
+            job = JobRecord(
+                url=row["url"] or "",
+                source=row["source"] or "",
+                company="",
+                title=row["title"] or "",
+                location=row["location"] or "",
+                jd_text=row["jd_text"] or "",
+                salary=row["salary"] or "",
+            )
+            on_target = passes_title_location(job)
+            meta["discovery_relevance"] = "relevant" if on_target else "off_target"
+            scored = score_job(job.to_dict())
+
+            # Writes fit_score straight rather than going through upsert_job,
+            # whose "0 means not scored by this writer" rule would keep a stale
+            # non-zero score alive after the profile stopped matching the job.
+            conn.execute(
+                "UPDATE jobs SET metadata_json = ?, fit_score = ?, fit_reason = ? WHERE id = ?",
+                (
+                    json.dumps(meta),
+                    int(scored.get("fit_score") or 0),
+                    str(scored.get("fit_reason") or ""),
+                    row["id"],
+                ),
+            )
+            updated += 1
+            relevant += 1 if on_target else 0
+
+    logger.info("Retagged %s stored jobs against current targeting (%s relevant)", updated, relevant)
+    return {"updated": updated, "relevant": relevant}
 
 
 def persist_discovered(jobs: list[JobRecord], run_id: str | None = None) -> int:

@@ -23,6 +23,7 @@ export default function InboxPage() {
   const { query } = usePipelineSearch();
   const { status: setupStatus } = useSetupStatus();
   const llmAvailable = setupStatus?.llm?.available ?? false;
+  const savedJobCount = setupStatus?.counts?.jobs ?? 0;
   const [relevance, setRelevance] = useState<"relevant" | "all">("relevant");
   const {
     jobs,
@@ -445,10 +446,32 @@ export default function InboxPage() {
         </div>
       ) : jobs.length === 0 ? (
         <div className="rounded-[32px] border border-mist bg-white p-12 text-center">
-          <p className="text-lg font-bold text-ink">No new jobs yet</p>
-          <p className="mt-2 text-sm text-stone">
-            Run discovery to start finding roles that match your profile.
-          </p>
+          {savedJobCount > 0 && relevance === "relevant" ? (
+            <>
+              <p className="text-lg font-bold text-ink">
+                Nothing on target yet — {savedJobCount.toLocaleString()} saved
+              </p>
+              <p className="mt-2 text-sm text-stone">
+                Discovery found these but none match your target titles and locations.
+                See everything it found, or widen your targeting on the Profile page.
+              </p>
+              <div className="mt-4 flex justify-center gap-2">
+                <Button variant="lime" onClick={() => setRelevance("all")}>
+                  Show all {savedJobCount.toLocaleString()}
+                </Button>
+                <Button variant="ghost" onClick={() => router.push("/profile")}>
+                  Edit targeting
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-lg font-bold text-ink">No new jobs yet</p>
+              <p className="mt-2 text-sm text-stone">
+                Run discovery to start finding roles that match your profile.
+              </p>
+            </>
+          )}
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-[32px] border border-mist bg-white p-12 text-center">

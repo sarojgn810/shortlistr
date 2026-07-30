@@ -44,13 +44,20 @@ def passes_title_location(job: JobRecord) -> bool:
     Reads SEARCH_KEYWORDS and LOCATION_KEYWORDS from config at call time
     (not import time) so profile changes apply without restart.
     """
-    title_ok = _title_matches(job.title, _cfg.SEARCH_KEYWORDS)
+    if not _title_matches(job.title, _cfg.SEARCH_KEYWORDS):
+        return False
+    # A user who hasn't stated preferred_locations will take a job anywhere.
+    # LOCATION_KEYWORDS falls back to ["remote"] for query building, so gating on
+    # it here would reject every posting that carries a city name.
+    if not getattr(_cfg, "LOCATION_PREFERENCE_SET", True):
+        return True
     location = job.location.lower()
-    loc_ok = any(lk in location for lk in _cfg.LOCATION_KEYWORDS) or not location.strip()
+    if not location.strip():
+        return True
     if job.source in ("RemoteOK", "Himalayas", "Remotive", "SearchDiscovery"):
         if _cfg.WANTS_REMOTE:
-            return title_ok
-    return title_ok and loc_ok
+            return True
+    return any(lk in location for lk in _cfg.LOCATION_KEYWORDS)
 
 
 def apply_discovery_filter(jobs: list[JobRecord]) -> tuple[list[JobRecord], list[JobRecord], FilterStats]:

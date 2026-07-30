@@ -101,6 +101,64 @@ def test_wants_remote_false_when_only_cities(tmp_path):
         config.SHORTLISTR_ROOT = original
 
 
+def test_blank_preferred_does_not_become_remote_only(tmp_path):
+    """A user who never stated a location will take a job anywhere.
+
+    LOCATION_KEYWORDS falls back to ["remote"] for query building. Reading that
+    as a preference made the first scan reject every posting with a city in it,
+    so the DB filled with thousands of off_target rows and Discover was empty.
+    """
+    from models.job import JobRecord
+    from pipeline.filter import passes_title_location
+
+    _write_profile(str(tmp_path), locations=[])
+    original = config.SHORTLISTR_ROOT
+    try:
+        config.SHORTLISTR_ROOT = str(tmp_path)
+        config.reload_discovery_config()
+        assert config.LOCATION_PREFERENCE_SET is False
+        assert config.REMOTE_STRICT is False
+
+        city_job = JobRecord(
+            url="https://example.com/job/3",
+            source="Greenhouse",
+            company="TestCo",
+            title="Site Reliability Engineer",
+            location="Hyderabad, India",
+        )
+        assert passes_title_location(city_job) is True
+    finally:
+        config.SHORTLISTR_ROOT = original
+
+
+def test_stated_location_still_narrows(tmp_path):
+    from models.job import JobRecord
+    from pipeline.filter import passes_title_location
+
+    _write_profile(str(tmp_path), locations=["Hyderabad"])
+    original = config.SHORTLISTR_ROOT
+    try:
+        config.SHORTLISTR_ROOT = str(tmp_path)
+        config.reload_discovery_config()
+        assert config.LOCATION_PREFERENCE_SET is True
+
+        def _job(location: str) -> JobRecord:
+            return JobRecord(
+                url=f"https://example.com/job/{location}",
+                source="Greenhouse",
+                company="TestCo",
+                title="Site Reliability Engineer",
+                location=location,
+            )
+
+        assert passes_title_location(_job("Hyderabad, India")) is True
+        assert passes_title_location(_job("Berlin, Germany")) is False
+        # A posting with no location at all stays in — it may still be a match.
+        assert passes_title_location(_job("")) is True
+    finally:
+        config.SHORTLISTR_ROOT = original
+
+
 def test_remote_aggregator_filtered_when_no_remote_wanted(tmp_path):
     """Remote-only sources (Himalayas etc.) should be filtered out when
     the user only wants Indian cities (no 'Remote' in preferred_locations)."""

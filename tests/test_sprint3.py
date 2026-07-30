@@ -104,9 +104,20 @@ def test_apply_assist_requires_approved_pipeline(isolated_data_dir):
         apply_assist_for_job(job.job_id)
 
 
-def test_golden_jd_file_bands():
+def test_golden_jd_file_bands(monkeypatch):
     import json
+    import config
     from eval.service import evaluate_job_text
+
+    # The heuristic scores a title-family hit off the live profile. Pin the
+    # targeting these fixtures were written for — reading the developer's own
+    # profile.yml made the bands pass here and fail on a fresh clone, which has
+    # no profile at all.
+    monkeypatch.setattr(
+        config,
+        "SEARCH_KEYWORDS",
+        ["site reliability engineer", "sre", "devops engineer", "platform engineer"],
+    )
 
     fixture_dir = os.path.join(ROOT, "tests", "fixtures", "jds")
     expected = json.load(open(os.path.join(fixture_dir, "expected.json"), encoding="utf-8"))

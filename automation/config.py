@@ -406,17 +406,29 @@ def _expand_location_keywords(preferred: list[str]) -> list[str]:
     return locs or ["remote"]
 
 
+def _preferred_locations() -> list[str]:
+    f = _PROFILE.get("filters") if isinstance(_PROFILE.get("filters"), dict) else {}
+    return _as_list(f.get("preferred_locations"))
+
+
 def _build_location_keywords() -> list[str]:
     """Derive LOCATION_KEYWORDS from preferred_locations in the profile."""
-    f = _PROFILE.get("filters") if isinstance(_PROFILE.get("filters"), dict) else {}
-    return _expand_location_keywords(_as_list(f.get("preferred_locations")))
+    return _expand_location_keywords(_preferred_locations())
 
 
 LOCATION_KEYWORDS: list[str] = _build_location_keywords()
 
+# Did the user actually say where they want to work? The ["remote"] fallback in
+# _expand_location_keywords is a search hint for an untargeted first run, not a
+# constraint. Anything that *rejects* a job on location must check this flag —
+# reading the fallback as a preference turns a blank profile into a remote-only
+# search that tags almost every posting off_target, so the DB fills with
+# thousands of jobs while Discover stays empty.
+LOCATION_PREFERENCE_SET: bool = bool(_preferred_locations())
+
 # REMOTE_STRICT is True when preferred_locations contains ONLY remote terms
 # (no city names). If the user listed any city, allow non-remote jobs too.
-REMOTE_STRICT = bool(LOCATION_KEYWORDS) and all(
+REMOTE_STRICT = LOCATION_PREFERENCE_SET and all(
     kw in _REMOTE_TERMS for kw in LOCATION_KEYWORDS
 )
 WANTS_REMOTE = any(kw in _REMOTE_TERMS for kw in LOCATION_KEYWORDS)
@@ -562,7 +574,7 @@ def reload_discovery_config() -> None:
     for the rest of the process lifetime, and a first-run API that imported
     against a leftover profile would never fall back.
     """
-    global SEARCH_KEYWORDS, LOCATION_KEYWORDS
+    global SEARCH_KEYWORDS, LOCATION_KEYWORDS, LOCATION_PREFERENCE_SET
     global REMOTE_STRICT, WANTS_REMOTE, MIN_SALARY_INR_LPA, MIN_SALARY_USD, DEAL_BREAKERS
     global CANDIDATE, APPLICATION, _PROFILE
     global LINKEDIN_CONFIG, NAUKRI_CONFIG, MCP_SERVERS, EMAIL_CONFIG
@@ -591,9 +603,10 @@ def reload_discovery_config() -> None:
     DEAL_BREAKERS = _as_list(filt.get("deal_breakers"))
 
     preferred = _as_list(filt.get("preferred_locations"))
+    LOCATION_PREFERENCE_SET = bool(preferred)
     locs = _expand_location_keywords(preferred) if preferred else ["remote"]
     LOCATION_KEYWORDS = locs
-    REMOTE_STRICT = bool(locs) and all(kw in _REMOTE_TERMS for kw in locs)
+    REMOTE_STRICT = LOCATION_PREFERENCE_SET and all(kw in _REMOTE_TERMS for kw in locs)
     WANTS_REMOTE = any(kw in _REMOTE_TERMS for kw in locs)
 
     # Apply-assist reads these at fill time — keep them live after profile save.

@@ -208,8 +208,11 @@ def test_discover_scores_jobs_at_persist_time(monkeypatch, isolated_data_dir):
                           jd_text="kubernetes terraform prometheus grafana"),
             ], FetchStats(source=self.name, raw_count=1)
 
-    from sources import registry as reg_mod
-    monkeypatch.setattr(reg_mod, "get_registry", lambda: type("R", (), {"adapters": lambda self: [StubAdapter()]})())
+    # discovery.py binds get_registry at import, so patching sources.registry
+    # only works while that module happens to be unimported — any test that
+    # touches the orchestrator first silently restores the real adapters.
+    from orchestrator import discovery as disc_mod
+    monkeypatch.setattr(disc_mod, "get_registry", lambda: type("R", (), {"adapters": lambda self: [StubAdapter()]})())
     import config
 
     # Target the role this stub emits. Without pinning, the job is rejected on
