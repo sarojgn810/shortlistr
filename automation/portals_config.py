@@ -43,6 +43,22 @@ def _slug_from_ashby_url(url: str) -> str | None:
     return m.group(1) if m else None
 
 
+_WORKDAY_URL_RE = re.compile(
+    r"https?://([a-z0-9-]+)\.wd(\d+)\.myworkdayjobs\.com/"
+    r"(?:[a-z]{2}-[A-Z]{2}/)?"  # optional locale like en-US/
+    r"([^/?#]+)",
+    re.I,
+)
+
+
+def parse_workday_url(url: str) -> tuple[str, str, str] | None:
+    """Return (tenant, wd_number, site) from a myworkdayjobs.com careers URL."""
+    m = _WORKDAY_URL_RE.search(url or "")
+    if not m:
+        return None
+    return m.group(1).lower(), m.group(2), m.group(3)
+
+
 def _parse_company(company: dict) -> tuple[str | None, str | None, str | None, str | None]:
     """Return (name, greenhouse_slug, lever_slug, ashby_slug)."""
     if company.get("enabled") is False:
@@ -135,6 +151,46 @@ def get_ashby_slugs() -> list[str]:
     return sorted(ashby)
 
 
+def get_workday_boards() -> list[tuple[str, str, str, str]]:
+    """Return Workday boards as (tenant, wd_number, site, display_name).
+
+    Accepts either ``scan_method: workday`` or a careers_url / api on
+    ``*.myworkdayjobs.com``.
+    """
+    path = _resolve_portals_path()
+    if not path:
+        return []
+
+    try:
+        import yaml
+
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except Exception:
+        return []
+
+    out: list[tuple[str, str, str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for company in data.get("tracked_companies") or []:
+        if not isinstance(company, dict) or company.get("enabled") is False:
+            continue
+        method = str(company.get("scan_method") or "").strip().lower()
+        url = str(company.get("api") or company.get("careers_url") or "")
+        parsed = parse_workday_url(url)
+        if not parsed and method != "workday":
+            continue
+        if not parsed:
+            continue
+        tenant, wd_n, site = parsed
+        key = (tenant, wd_n, site.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        name = str(company.get("name") or "").strip() or tenant.title()
+        out.append((tenant, wd_n, site, name))
+    return out
+
+
 def get_websearch_company_queries(
     portals_path: str | None = None,
     *,
@@ -186,7 +242,11 @@ def get_websearch_company_queries(
 def portals_summary() -> str:
     path = _resolve_portals_path()
     gh, lever, ashby = load_portals_slugs()
+    workday = get_workday_boards()
     if path:
         label = "portals.yml" if path == PORTALS_PATH else "portals.example.yml (fallback)"
-        return f"{label}: {len(gh)} GH, {len(lever)} Lever, {len(ashby)} Ashby slugs"
+        return (
+            f"{label}: {len(gh)} GH, {len(lever)} Lever, {len(ashby)} Ashby, "
+            f"{len(workday)} Workday boards"
+        )
     return "portals.yml: not found (no ATS watchlist slugs)"

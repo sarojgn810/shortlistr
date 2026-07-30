@@ -44,6 +44,20 @@ _ALWAYS_DISQUALIFY = [
 SKILL_THRESHOLD = 2
 SENIORITY_SKIP = ["junior ", "entry level", "entry-level", "associate ", "intern ", "trainee "]
 
+# Atomic tech tokens used for JD overlap. Résumé skills sections are often
+# category blobs ("SRE & Reliability SLO / SLI / Error Budgets"), so matching
+# the whole phrase against a JD never hits. We mine these tokens instead.
+_TECH_TOKENS = [
+    "kubernetes", "k8s", "aws", "gcp", "azure", "terraform", "ansible",
+    "prometheus", "grafana", "datadog", "splunk", "new relic", "opentelemetry",
+    "python", "golang", "docker", "helm", "linux", "jenkins", "github actions",
+    "argocd", "gitops", "observability", "slo", "sli", "sla", "incident",
+    "on-call", "oncall", "ci/cd", "cicd", "kafka", "redis", "postgres",
+    "postgresql", "sql", "java", "bash", "shell", "elk", "elasticsearch",
+    "istio", "service mesh", "chaos", "runbook", "pagerduty", "cloudwatch",
+    "lambda", "eks", "ecs", "mlops", "aiops", "rag", "llm", "openai",
+]
+
 
 def core_titles() -> list[str]:
     """Titles worth scoring — always from live SEARCH_KEYWORDS (profile)."""
@@ -51,7 +65,11 @@ def core_titles() -> list[str]:
 
 
 def skill_signals() -> list[str]:
-    """Skills from the résumé competencies section when available."""
+    """Atomic skills mined from the résumé for JD overlap scoring.
+
+    Prefer known tech tokens found in the skills (and summary) text over raw
+    category phrases. Falls back to short split tokens when nothing known hits.
+    """
     try:
         from config import CV_MD_PATH
         from cv.parser import parse_cv_markdown
@@ -60,13 +78,31 @@ def skill_signals() -> list[str]:
             return []
         md = open(CV_MD_PATH, encoding="utf-8").read()
         sections = parse_cv_markdown(md)
-        blob = getattr(sections, "skills", "") or getattr(sections, "competencies", "") or ""
+        blob = " ".join(
+            [
+                getattr(sections, "skills", "") or "",
+                getattr(sections, "competencies", "") or "",
+                getattr(sections, "summary", "") or "",
+            ]
+        ).lower()
         if not blob.strip():
             return []
-        parts = re.split(r"[,;/\n•·|]+", blob)
+
+        found: list[str] = []
+        for tok in _TECH_TOKENS:
+            # Word-ish boundary so "go" doesn't match "golang" twice wrongly,
+            # and short tokens like "sli" don't match inside longer words.
+            if re.search(rf"(?<![a-z0-9]){re.escape(tok)}(?![a-z0-9])", blob):
+                if tok not in found:
+                    found.append(tok)
+        if found:
+            return found[:40]
+
+        # Fallback: split categories into short fragments.
+        parts = re.split(r"[,;/\n•·|&]+", blob)
         out: list[str] = []
         for p in parts:
-            s = p.strip().lower()
+            s = re.sub(r"\s+", " ", p).strip().lower()
             if 2 <= len(s) <= 40 and s not in out:
                 out.append(s)
         return out[:40]
@@ -91,6 +127,17 @@ def disqualify_phrases() -> list[str]:
 
 def _clean(text: str) -> str:
     return text.lower().strip()
+
+
+def _token_in_text(token: str, text: str) -> bool:
+    """Substring match with word boundaries for short / ambiguous tokens."""
+    tok = (token or "").lower().strip()
+    hay = text or ""
+    if not tok or not hay:
+        return False
+    if len(tok) <= 4 or tok in {"java", "bash", "helm", "linux", "chaos", "redis", "kafka"}:
+        return bool(re.search(rf"(?<![a-z0-9]){re.escape(tok)}(?![a-z0-9])", hay))
+    return tok in hay
 
 
 def score_job(job: dict) -> dict:
@@ -172,10 +219,14 @@ def score_job(job: dict) -> dict:
             job["fit_reason"] = f"disqualifier found: '{phrase}'"
             return job
 
-    # ── 4. Skill overlap from résumé (optional — skipped when none parsed) ───
+    # ── 4. Skill overlap from résumé ─────────────────────────────────────────
+    # Three honest cases:
+    #   skills + JD text  → score overlap (and soft-penalize thin overlap)
+    #   skills, no JD     → keep title/location score; say JD isn't fetched yet
+    #   no skills         → title-only provisional bonus
     skills = skill_signals()
     if skills and jd:
-        jd_signals = [s for s in skills if s in jd]
+        jd_signals = [s for s in skills if _token_in_text(s, jd)]
         skill_score = min(len(jd_signals) * 5, 40)
         score += skill_score
         if jd_signals:
@@ -184,10 +235,14 @@ def score_job(job: dict) -> dict:
             job["fit_score"] = max(score - 20, 0)
             job["fit_reason"] = f"low skill overlap in JD ({len(jd_signals)} signals)"
             return job
-    else:
-        # Title-only scoring when we have no résumé skills yet.
+    elif skills and not jd:
+        # LinkedIn guest / thin aggregator cards often have title+location only.
+        # Don't blame the résumé — and don't re-append "title match".
         score += 10
-        reasons.append("title match (no résumé skills to compare)")
+        reasons.append("JD not fetched yet")
+    else:
+        score += 10
+        reasons.append("résumé skills not parsed yet")
 
     # ── 5. Location bonus from the user's preferred locations ────────────────
     loc = _clean(job.get("location", ""))
@@ -210,7 +265,7 @@ def score_job(job: dict) -> dict:
     except Exception:
         pass
 
-    job["fit_score"] = score
+    job["fit_score"] = min(score, 100)
     job["fit_reason"] = "; ".join(reasons) if reasons else "basic title match"
     return job
 

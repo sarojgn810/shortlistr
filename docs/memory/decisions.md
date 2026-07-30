@@ -15,6 +15,23 @@ Template:
 
 ---
 
+## 2026-07-30 — LinkedIn Profile Optimizer is copy-only + heuristic-first
+**Decision:** Ship a LinkedIn Profile Optimizer workspace (single sidebar
+“LinkedIn” item + in-page tabs at `/linkedin`) that imports from résumé or
+LinkedIn URL/paste, scores against role packs, and rewrites sections grounded
+in evidence only. Changes are copy/paste into LinkedIn — never auto-edit the
+network. Public LinkedIn URL fetch is best-effort and often login-walled; CV
+import is the reliable ground truth. Rewrites must not invent employers,
+metrics, or unproven keywords (those stay as optional recommendations).
+**Why:** Recruiter discoverability is a first-class job-search asset alongside
+the résumé, but LinkedIn automation is brittle and against product ethics.
+Hallucinated “optimizations” destroy trust.
+**Touches:** `automation/linkedin_optimizer/`, `api/linkedin_optimizer.py`,
+`dashboard/app/linkedin/`, `dashboard/src/components/linkedin/`,
+`tests/test_linkedin_optimizer.py`.
+**Updated:** 2026-07-30 — collapsed noisy sidebar group; CV/URL import gate;
+grounded rewriter.
+
 ## 2026-07-30 — User DB is profile-scoped (persist gate + retarget purge)
 **Decision:** Discovery only upserts jobs that pass title/location *and* the
 fit floor (`jobs_for_user_db`). Off-target and low-fit rows never inflate the

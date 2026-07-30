@@ -1,939 +1,1795 @@
 # Portal Scanner Configuration
-# Used by /shortlistr scan to discover new offers automatically.
+# Copy to portals.yml and customize.
 #
-# Strategy (3 levels):
-#   1. Playwright → careers_url of each company (real-time, reliable)
-#   2. Greenhouse API → structured JSON (fast, Greenhouse-only)
-#   3. WebSearch with site: filters (broad discovery, may be stale)
+# Companies with Greenhouse / Lever / Ashby / Workday board URLs are fetched by
+# the watchlist + workday discovery adapters (fast JSON APIs).
+# scan_method: playwright  → branded careers page (slower; not every scan pass).
+# scan_method: websearch   → capped site: queries during discovery.
 #
-# IMPORTANT: Each company in tracked_companies MUST have careers_url.
-#   Prefer the BRANDED company careers URL whenever available; use ATS-hosted URL only as fallback.
-#   ✅ https://careers.mastercard.com   ⚠️ https://mastercard.wd1.myworkdayjobs.com (fallback only)
-#   ✅ https://openai.com/careers       ⚠️ https://job-boards.greenhouse.io/openai (fallback only)
-#   Exception: ATS-hosted careers_url is acceptable when no branded careers page exists.
-#   Using raw ATS URLs when a branded page exists can cause false 410 errors (job ID mismatch).
-#
-# HOW TO CUSTOMIZE:
-#   1. Copy this file to portals.yml in the project root
-#   2. Edit title_filter.positive with YOUR target role keywords
-#   3. Add/remove companies in tracked_companies
-#   4. Adjust search_queries for your preferred job boards
-#   5. Set enabled: false on companies you don't care about
-
-# -- Title filter --
-# The scanner uses these keywords to decide if a title is relevant.
-# At least 1 positive must match AND 0 negatives must match (case-insensitive).
+# Imported from companies_ats_boards_detected.csv where ATS boards were detected;
+# remaining careers URLs are marked playwright.
 
 title_filter:
-  # Field-neutral defaults — match config._DEFAULT_SEARCH_KEYWORDS. A fresh clone
-  # must not inherit the author's SRE/DevOps targeting; the user replaces these
-  # in portals.yml after onboarding with their own role keywords.
   positive:
-    - "Software Engineer"
-    - "Data Analyst"
-    - "Product Manager"
-    - "Project Manager"
-    - "Business Analyst"
+  - Software Engineer
+  - Data Analyst
+  - Product Manager
+  - Project Manager
+  - Business Analyst
   negative:
-    - "Junior"
-    - "Intern"
-    - "Trainee"
+  - Junior
+  - Intern
+  - Trainee
   seniority_boost:
-    - "Senior"
-    - "Staff"
-    - "Principal"
-    - "Lead"
-    - "Head"
-    - "Director"
-
-# -- Search queries --
-# Each query triggers a WebSearch. Use site: to filter by portal.
-# The scanner extracts title, URL, and company from results.
-
+  - Senior
+  - Staff
+  - Principal
+  - Lead
+  - Head
+  - Director
 search_queries:
-  # -- Ashby --
-  - name: Ashby — Software Engineer
-    query: 'site:jobs.ashbyhq.com "Software Engineer" OR "Backend Engineer" remote'
-    enabled: false
-
-  - name: Ashby — Platform Engineer
-    query: 'site:jobs.ashbyhq.com "Platform Engineer" OR "Infrastructure Engineer" remote'
-    enabled: false
-
-  # -- Greenhouse --
-  - name: Greenhouse — SRE & DevOps
-    query: 'site:boards.greenhouse.io OR site:job-boards.greenhouse.io "Site Reliability Engineer" OR "DevOps" remote'
-    enabled: false
-
-  - name: Greenhouse — Platform Engineer
-    query: 'site:boards.greenhouse.io OR site:job-boards.greenhouse.io "Platform Engineer" OR "Infrastructure" remote'
-    enabled: false
-
-  # -- Workable --
-  - name: Workable — SRE & DevOps
-    query: 'site:apply.workable.com "Site Reliability Engineer" OR "SRE" OR "DevOps" remote'
-    enabled: false
-
-  # -- Remote-friendly boards --
-  - name: Remotive — SRE/DevOps
-    query: 'site:remotive.com "Site Reliability Engineer" OR "DevOps" OR "Platform Engineer"'
-    enabled: false
-
-  - name: WeWorkRemotely — SRE/DevOps
-    query: 'site:weworkremotely.com "SRE" OR "DevOps" OR "Infrastructure" OR "Kubernetes"'
-    enabled: false
-
-# -- Tracked companies --
-# Companies whose career pages are checked directly.
-# scan_method: playwright (default), websearch, greenhouse_api
-# For Greenhouse companies, add api: field for faster structured JSON access.
-
+- name: Ashby — Software Engineer
+  query: site:jobs.ashbyhq.com "Software Engineer" OR "Backend Engineer" remote
+  enabled: false
+- name: Ashby — Platform Engineer
+  query: site:jobs.ashbyhq.com "Platform Engineer" OR "Infrastructure Engineer" remote
+  enabled: false
+- name: Greenhouse — SRE & DevOps
+  query: site:boards.greenhouse.io OR site:job-boards.greenhouse.io "Site Reliability Engineer" OR "DevOps"
+    remote
+  enabled: false
+- name: Greenhouse — Platform Engineer
+  query: site:boards.greenhouse.io OR site:job-boards.greenhouse.io "Platform Engineer" OR "Infrastructure"
+    remote
+  enabled: false
+- name: Workable — SRE & DevOps
+  query: site:apply.workable.com "Site Reliability Engineer" OR "SRE" OR "DevOps" remote
+  enabled: false
+- name: Remotive — SRE/DevOps
+  query: site:remotive.com "Site Reliability Engineer" OR "DevOps" OR "Platform Engineer"
+  enabled: false
+- name: WeWorkRemotely — SRE/DevOps
+  query: site:weworkremotely.com "SRE" OR "DevOps" OR "Infrastructure" OR "Kubernetes"
+  enabled: false
 tracked_companies:
-
-  # -- AI Labs & LLM providers --
-
-  - name: Anthropic
-    careers_url: https://job-boards.greenhouse.io/anthropic
-    api: https://boards-api.greenhouse.io/v1/boards/anthropic/jobs
-    enabled: true
-
-  - name: OpenAI
-    careers_url: https://openai.com/careers
-    scan_method: websearch
-    scan_query: 'site:openai.com/careers "Solutions" OR "Forward Deployed" OR "AI Engineer"'
-    enabled: true
-
-  # -- Voice AI & Conversational AI --
-
-  - name: PolyAI
-    careers_url: https://job-boards.eu.greenhouse.io/polyai
-    api: https://boards-api.greenhouse.io/v1/boards/polyai/jobs
-    notes: "UK. Voice AI for enterprise contact centers."
-    enabled: true
-
-  - name: Parloa
-    careers_url: https://job-boards.eu.greenhouse.io/parloa
-    api: https://boards-api.greenhouse.io/v1/boards/parloa/jobs
-    notes: "Berlin EMEA. Voice AI enterprise."
-    enabled: true
-
-  - name: Intercom
-    careers_url: https://job-boards.greenhouse.io/intercom
-    api: https://boards-api.greenhouse.io/v1/boards/intercom/jobs
-    notes: "Dublin EMEA. Fin AI agent."
-    enabled: true
-
-  - name: Hume AI
-    careers_url: https://job-boards.greenhouse.io/humeai
-    api: https://boards-api.greenhouse.io/v1/boards/humeai/jobs
-    notes: "NYC. Empathic voice AI."
-    enabled: true
-
-  - name: ElevenLabs
-    careers_url: https://jobs.ashbyhq.com/elevenlabs
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/elevenlabs'
-    notes: "Voice AI TTS leader."
-    enabled: true
-
-  - name: Deepgram
-    careers_url: https://jobs.ashbyhq.com/deepgram
-    scan_method: websearch
-    scan_query: 'site:deepgram.com/careers OR "deepgram" "Solutions" OR "AI Engineer" site:jobs.ashbyhq.com'
-    notes: "STT/TTS APIs."
-    enabled: true
-
-  - name: Vapi
-    careers_url: https://jobs.ashbyhq.com/vapi
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/vapi'
-    notes: "Voice AI infrastructure."
-    enabled: true
-
-  - name: Bland AI
-    careers_url: https://jobs.ashbyhq.com/bland
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/bland'
-    notes: "Voice phone agents. $65M Series B."
-    enabled: true
-
-  # -- AI-native platforms (FDE/SA teams) --
-
-  - name: Retool
-    careers_url: https://retool.com/careers
-    scan_method: websearch
-    scan_query: 'site:retool.com/careers "Deployed" OR "AI" OR "Solutions"'
-    notes: "London. Popularized Deployed Engineer role."
-    enabled: true
-
-  - name: Airtable
-    careers_url: https://job-boards.greenhouse.io/airtable
-    api: https://boards-api.greenhouse.io/v1/boards/airtable/jobs
-    notes: "No-code + AI platform."
-    enabled: true
-
-  - name: Vercel
-    careers_url: https://job-boards.greenhouse.io/vercel
-    api: https://boards-api.greenhouse.io/v1/boards/vercel/jobs
-    notes: "AI SDK, v0.dev. Frontend AI tooling."
-    enabled: true
-
-  - name: Temporal
-    careers_url: https://job-boards.greenhouse.io/temporal
-    api: https://boards-api.greenhouse.io/v1/boards/temporal/jobs
-    notes: "Workflow orchestration."
-    enabled: true
-
-  - name: Arize AI
-    careers_url: https://job-boards.greenhouse.io/arizeai
-    api: https://boards-api.greenhouse.io/v1/boards/arizeai/jobs
-    notes: "LLMOps / AI observability."
-    enabled: true
-
-  - name: RunPod
-    careers_url: https://job-boards.greenhouse.io/runpod
-    api: https://boards-api.greenhouse.io/v1/boards/runpod/jobs
-    notes: "GPU cloud for AI."
-    enabled: true
-
-  - name: Glean
-    careers_url: https://job-boards.greenhouse.io/gleanwork
-    api: https://boards-api.greenhouse.io/v1/boards/gleanwork/jobs
-    notes: "Enterprise AI search."
-    enabled: true
-
-  # -- Contact Center AI & CX --
-
-  - name: Ada
-    careers_url: https://job-boards.greenhouse.io/ada
-    scan_method: websearch
-    scan_query: '"ada.cx" OR "ada" "AI" "Solutions" OR "Engineer" site:jobs.ashbyhq.com OR site:job-boards.greenhouse.io'
-    notes: "Toronto + remote. AI customer service."
-    enabled: true
-
-  - name: LivePerson
-    careers_url: https://liveperson.com/company/careers
-    scan_method: websearch
-    scan_query: 'site:liveperson.com/careers OR "liveperson" "Solutions" OR "AI" site:job-boards.greenhouse.io'
-    notes: "Remote EMEA. Conversational AI enterprise."
-    enabled: true
-
-  - name: Sierra
-    careers_url: https://jobs.ashbyhq.com/sierra
-    scan_method: websearch
-    scan_query: '"sierra.ai" "AI" "Forward Deployed" OR "Applied" OR "Solutions" site:jobs.ashbyhq.com'
-    notes: "Bret Taylor (ex-CEO Salesforce). AI customer agents."
-    enabled: true
-
-  - name: Decagon
-    careers_url: https://jobs.ashbyhq.com/decagon
-    scan_method: websearch
-    scan_query: '"decagon" "AI" "Forward Deployed" OR "Solutions" site:jobs.ashbyhq.com'
-    notes: "AI customer support agents."
-    enabled: true
-
-  # -- Enterprise comms & contact center --
-
-  - name: Talkdesk
-    careers_url: https://www.talkdesk.com/careers
-    scan_method: websearch
-    scan_query: 'site:talkdesk.com/careers "AI" OR "Solutions Architect" OR "AI Engineer"'
-    notes: "Lisbon. Contact center AI. EMEA friendly."
-    enabled: true
-
-  - name: Twilio
-    careers_url: https://job-boards.greenhouse.io/twilio
-    api: https://boards-api.greenhouse.io/v1/boards/twilio/jobs
-    notes: "Voice/messaging. ~25 India/Remote-India roles on Greenhouse."
-    enabled: true
-
-  - name: Dialpad
-    careers_url: https://www.dialpad.com/careers
-    scan_method: websearch
-    scan_query: '"dialpad" "AI" "Solutions" OR "Engineer" site:job-boards.greenhouse.io OR site:jobs.ashbyhq.com'
-    notes: "Voice AI for business comms."
-    enabled: true
-
-  - name: Gong
-    careers_url: https://www.gong.io/careers
-    scan_method: websearch
-    scan_query: 'site:gong.io/careers "AI" OR "Solutions" OR "Architect"'
-    notes: "Revenue intelligence with voice AI."
-    enabled: true
-
-  - name: Genesys
-    careers_url: https://www.genesys.com/careers
-    scan_method: websearch
-    scan_query: 'site:genesys.com/careers "AI" "Solutions Architect" OR "AI Engineer"'
-    notes: "Contact center cloud + AI."
-    enabled: true
-
-  - name: Salesforce
-    careers_url: https://careers.salesforce.com
-    scan_method: websearch
-    scan_query: 'site:careers.salesforce.com "Forward Deployed" OR "AI Engineer" OR "Agentforce"'
-    notes: "Agentforce = AI agents platform."
-    enabled: true
-
-  # -- AI infra & LLMOps --
-
-  - name: Langfuse
-    careers_url: https://langfuse.com/careers
-    scan_method: websearch
-    scan_query: '"langfuse" careers OR jobs "engineer" OR "solutions"'
-    notes: "Berlin. LLMOps / observability."
-    enabled: true
-
-  - name: Lindy
-    careers_url: https://jobs.ashbyhq.com/lindy
-    scan_method: websearch
-    scan_query: '"lindy.ai" "AI" "Forward Deployed" OR "Solutions" site:jobs.ashbyhq.com'
-    notes: "AI agent management platform."
-    enabled: true
-
-  - name: Cognigy
-    careers_url: https://careers.cognigy.com
-    scan_method: websearch
-    scan_query: '"cognigy" careers "AI" OR "Solutions" OR "Engineer"'
-    notes: "Dusseldorf EMEA. Conversational AI enterprise."
-    enabled: true
-
-  - name: Speechmatics
-    careers_url: https://job-boards.greenhouse.io/speechmatics
-    api: https://boards-api.greenhouse.io/v1/boards/speechmatics/jobs
-    notes: "Cambridge UK. Speech recognition platform."
-    enabled: true
-
-  # -- No-Code/Low-Code & Automation --
-
-  - name: n8n
-    careers_url: https://jobs.ashbyhq.com/n8n
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/n8n'
-    notes: "Berlin + remote EU/US. Workflow automation."
-    enabled: true
-
-  - name: Zapier
-    careers_url: https://jobs.ashbyhq.com/zapier
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/zapier'
-    notes: "Remote-first. Automation platform leader."
-    enabled: true
-
-  - name: Make.com (Celonis)
-    careers_url: https://www.make.com/en/careers
-    scan_method: websearch
-    scan_query: 'site:make.com/en/careers OR "make.com" "engineer" OR "solutions" site:jobs.ashbyhq.com'
-    notes: "Celonis parent company. Automation platform."
-    enabled: true
-
-  # -- Ashby-based (Playwright direct) --
-
-  - name: Cohere
-    careers_url: https://jobs.ashbyhq.com/cohere
-    notes: "AI/LLM provider. Toronto + remote."
-    enabled: true
-
-  - name: LangChain
-    careers_url: https://jobs.ashbyhq.com/langchain
-    notes: "LangChain/LangSmith framework."
-    enabled: true
-
-  - name: Pinecone
-    careers_url: https://jobs.ashbyhq.com/pinecone
-    notes: "Vector database."
-    enabled: true
-
-  # -- Lever-based (Playwright direct) --
-
-  - name: Mistral AI
-    careers_url: https://jobs.lever.co/mistral
-    notes: "Paris. European AI lab."
-    enabled: true
-
-  - name: Weights & Biases
-    careers_url: https://jobs.lever.co/wandb
-    notes: "MLOps platform."
-    enabled: true
-
-  - name: Palantir
-    careers_url: https://jobs.lever.co/palantir
-    notes: "FDE roles. Mostly US/London."
-    enabled: true
-
-  # -- European tech (EMEA-friendly) --
-
-  - name: Factorial
-    careers_url: https://job-boards.greenhouse.io/factorial
-    scan_method: websearch
-    scan_query: 'site:jobs.greenhouse.io/factorial'
-    notes: "Barcelona. HR SaaS unicorn."
-    enabled: true
-
-  - name: Attio
-    careers_url: https://jobs.ashbyhq.com/attio
-    scan_method: websearch
-    scan_query: 'site:attio.com/careers OR site:jobs.ashbyhq.com/attio'
-    notes: "Remote EU. AI-native CRM. Series B $52M."
-    enabled: true
-
-  - name: Tinybird
-    careers_url: https://jobs.ashbyhq.com/tinybird
-    scan_method: websearch
-    scan_query: 'site:tinybird.co/careers OR site:jobs.ashbyhq.com/tinybird'
-    notes: "Remote. Real-time data platform."
-    enabled: true
-
-  - name: Clarity AI
-    careers_url: https://jobs.lever.co/clarity-ai
-    scan_method: websearch
-    scan_query: 'site:clarity.ai/careers OR site:jobs.lever.co/clarity-ai'
-    notes: "Madrid/Remote. Sustainability analytics with AI."
-    enabled: true
-
-  - name: Travelperk
-    careers_url: https://jobs.ashbyhq.com/travelperk
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/travelperk'
-    notes: "Barcelona. Business travel unicorn."
-    enabled: true
-
-  # -- DACH & European AI ecosystem --
-  # All entries below have been verified against the Greenhouse / Ashby /
-  # Lever / Workable APIs or live job boards. Greenhouse boards expose a
-  # JSON API at https://boards-api.greenhouse.io/v1/boards/{slug}/jobs which
-  # the scanner can hit directly via the api: field.
-
-  # -- DACH AI labs & frontier model providers --
-
-  - name: Aleph Alpha
-    careers_url: https://jobs.ashbyhq.com/AlephAlpha
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/AlephAlpha'
-    notes: "Heidelberg DE. Sovereign European LLM provider, enterprise & government focus."
-    enabled: true
-
-  - name: DeepL
-    careers_url: https://jobs.ashbyhq.com/DeepL
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/DeepL'
-    notes: "Cologne DE. Translation & language AI. 60+ open roles, EU/DACH heavy."
-    enabled: true
-
-  - name: Black Forest Labs
-    careers_url: https://job-boards.greenhouse.io/blackforestlabs
-    api: https://boards-api.greenhouse.io/v1/boards/blackforestlabs/jobs
-    notes: "Freiburg DE / SF. FLUX image models, ex-Stable Diffusion team."
-    enabled: true
-
-  - name: Helsing
-    careers_url: https://job-boards.greenhouse.io/helsing
-    api: https://boards-api.greenhouse.io/v1/boards/helsing/jobs
-    notes: "Munich / Berlin / London / Paris. Defence AI unicorn. 100+ roles, ML & FDE."
-    enabled: true
-
-  # -- DACH enterprise & SaaS (AI-heavy) --
-
-  - name: Celonis
-    careers_url: https://job-boards.greenhouse.io/celonis
-    api: https://boards-api.greenhouse.io/v1/boards/celonis/jobs
-    notes: "Munich / NYC. Process intelligence, Applied AI Engineer roles, Field CTOs."
-    enabled: true
-
-  - name: Contentful
-    careers_url: https://job-boards.greenhouse.io/contentful
-    api: https://boards-api.greenhouse.io/v1/boards/contentful/jobs
-    notes: "Berlin / Denver. Headless CMS, AI content workflows."
-    enabled: true
-
-  - name: GetYourGuide
-    careers_url: https://job-boards.greenhouse.io/getyourguide
-    api: https://boards-api.greenhouse.io/v1/boards/getyourguide/jobs
-    notes: "Berlin. Travel marketplace, ML & data platform roles."
-    enabled: true
-
-  - name: HelloFresh
-    careers_url: https://job-boards.greenhouse.io/hellofresh
-    api: https://boards-api.greenhouse.io/v1/boards/hellofresh/jobs
-    notes: "Berlin. Meal kit unicorn, large data/ML org."
-    enabled: true
-
-  # -- DACH fintech --
-
-  - name: N26
-    careers_url: https://job-boards.greenhouse.io/n26
-    api: https://boards-api.greenhouse.io/v1/boards/n26/jobs
-    notes: "Berlin / Barcelona. Mobile bank, ~50 roles, ML & risk."
-    enabled: true
-
-  - name: Trade Republic
-    careers_url: https://job-boards.greenhouse.io/traderepublicbank
-    api: https://boards-api.greenhouse.io/v1/boards/traderepublicbank/jobs
-    notes: "Berlin / London / Paris. Neobroker, ~50 roles, platform & data."
-    enabled: true
-
-  - name: SumUp
-    careers_url: https://job-boards.greenhouse.io/sumup
-    api: https://boards-api.greenhouse.io/v1/boards/sumup/jobs
-    notes: "Berlin / London. Payments fintech, EU + LATAM hiring."
-    enabled: true
-
-  - name: Qonto
-    careers_url: https://jobs.lever.co/qonto
-    notes: "Paris / Berlin / Barcelona / Milan. SMB neobank, MLOps for AI Product roles."
-    enabled: true
-
-  # -- DACH logistics / mobility --
-
-  - name: Forto
-    careers_url: https://jobs.lever.co/forto
-    notes: "Berlin DE. Digital freight forwarder, product & data roles, German + English."
-    enabled: true
-
-  # -- Switzerland / Austria AI --
-
-  - name: Lakera
-    careers_url: https://jobs.ashbyhq.com/lakera.ai
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/lakera.ai'
-    notes: "Zurich CH / SF. AI security & guardrails. Has Forward Deployed Engineer roles."
-    enabled: true
-
-  - name: Scandit
-    careers_url: https://job-boards.greenhouse.io/scandit
-    api: https://boards-api.greenhouse.io/v1/boards/scandit/jobs
-    notes: "Zurich CH. Computer vision / smart data capture, ML roles."
-    enabled: true
-
-  - name: Cradle
-    careers_url: https://jobs.ashbyhq.com/cradlebio
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/cradlebio'
-    notes: "Zurich CH / Amsterdam. AI-guided protein design, ML researcher roles."
-    enabled: true
-
-  # -- France AI ecosystem --
-
-  - name: Hugging Face
-    careers_url: https://apply.workable.com/huggingface/
-    scan_method: websearch
-    scan_query: 'site:apply.workable.com/huggingface'
-    notes: "Paris / NYC / Remote. ML hub & open-source models."
-    enabled: true
-
-  - name: Photoroom
-    careers_url: https://jobs.ashbyhq.com/photoroom
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/photoroom'
-    notes: "Paris FR. AI photo editor, Head of CV / Head of ML roles."
-    enabled: true
-
-  - name: Pigment
-    careers_url: https://jobs.lever.co/pigment
-    notes: "Paris FR / NYC / London. AI-powered FP&A planning platform."
-    enabled: true
-
-  # -- UK & Ireland AI (EU-friendly hiring) --
-
-  - name: Wayve
-    careers_url: https://job-boards.greenhouse.io/wayve
-    api: https://boards-api.greenhouse.io/v1/boards/wayve/jobs
-    notes: "London UK. Embodied AI for self-driving, ML & robotics roles."
-    enabled: true
-
-  - name: Isomorphic Labs
-    careers_url: https://job-boards.greenhouse.io/isomorphiclabs
-    api: https://boards-api.greenhouse.io/v1/boards/isomorphiclabs/jobs
-    notes: "London / Lausanne / Cambridge MA. DeepMind spin-out for drug discovery AI."
-    enabled: true
-
-  - name: PhysicsX
-    careers_url: https://job-boards.greenhouse.io/physicsx
-    api: https://boards-api.greenhouse.io/v1/boards/physicsx/jobs
-    notes: "London UK. Physics-informed ML for engineering, ~40 roles."
-    enabled: true
-
-  - name: Stability AI
-    careers_url: https://job-boards.greenhouse.io/stabilityai
-    api: https://boards-api.greenhouse.io/v1/boards/stabilityai/jobs
-    notes: "London / SF. Generative AI image/video research lab."
-    enabled: true
-
-  - name: Synthesia
-    careers_url: https://jobs.ashbyhq.com/synthesia
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/synthesia OR site:job-boards.greenhouse.io/synthesia'
-    notes: "London UK. AI video generation for enterprise, $4B valuation."
-    enabled: true
-
-  - name: Faculty
-    careers_url: https://jobs.ashbyhq.com/faculty
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/faculty'
-    notes: "London UK. Applied AI consultancy. 80+ roles, AI Safety / MLE / Delivery."
-    enabled: true
-
-  - name: Causaly
-    careers_url: https://jobs.ashbyhq.com/causaly
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/causaly'
-    notes: "London / Athens. Biomedical knowledge graph + AI."
-    enabled: true
-
-  # -- Nordics AI --
-
-  - name: Lovable
-    careers_url: https://jobs.ashbyhq.com/lovable
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/lovable'
-    notes: "Stockholm SE. AI app builder (text-to-app), 80+ open roles."
-    enabled: true
-
-  - name: Legora
-    careers_url: https://jobs.ashbyhq.com/legora
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/legora'
-    notes: "Stockholm SE / NYC / London. AI-native legal workspace."
-    enabled: true
-
-  - name: Spotify
-    careers_url: https://jobs.lever.co/spotify
-    notes: "Stockholm SE / NYC / London. Audio platform, large ML/personalization org."
-    enabled: true
-
-  - name: Vinted
-    careers_url: https://jobs.lever.co/vinted
-    notes: "Vilnius LT / Berlin. C2C marketplace unicorn, data science & ML roles."
-    enabled: true
-
-  # -- Iberia AI --
-
-  - name: Amplemarket
-    careers_url: https://job-boards.greenhouse.io/amplemarket
-    api: https://boards-api.greenhouse.io/v1/boards/amplemarket/jobs
-    notes: "Lisbon PT / Remote. AI-native sales platform."
-    enabled: true
-
-  # -- AI / Developer Tools --
-
-  - name: Perplexity
-    careers_url: https://jobs.ashbyhq.com/perplexity
-    scan_method: websearch
-    scan_query: ‘site:jobs.ashbyhq.com/perplexity "AI" OR "Applied AI" OR "Forward Deployed" OR "Engineer"’
-    notes: "AI-native search and enterprise AI platform."
-    enabled: true
-
-  - name: Clay Labs
-    careers_url: https://jobs.ashbyhq.com/claylabs
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/claylabs "AI" OR "Developer Experience" OR "Growth" OR "Engineer"'
-    notes: "AI-native GTM and workflow automation platform."
-    enabled: true
-
-  - name: Runway
-    careers_url: https://job-boards.greenhouse.io/runwayml
-    api: https://boards-api.greenhouse.io/v1/boards/runwayml/jobs
-    notes: "Generative AI video and creative tooling platform."
-    enabled: true
-
-  - name: Hightouch
-    careers_url: https://job-boards.greenhouse.io/hightouch
-    api: https://boards-api.greenhouse.io/v1/boards/hightouch/jobs
-    notes: "Data activation platform with AI agents and solutions engineering roles."
-    enabled: true
-
-  - name: WorkOS
-    careers_url: https://jobs.ashbyhq.com/workos
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/workos "Solutions Engineer" OR "Developer Success" OR "Engineer"'
-    notes: "Developer tools and enterprise-ready auth/platform APIs."
-    enabled: true
-
-  # -- Dev Tools / AI Infra (DevRel, SA, FDE focus) --
-
-  - name: Supabase
-    careers_url: https://jobs.ashbyhq.com/supabase
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/supabase'
-    notes: "Open-source Firebase alternative. Remote-first. Postgres + Auth + Storage. Strong DevRel/DX hiring."
-    enabled: true
-
-  - name: Resend
-    careers_url: https://jobs.ashbyhq.com/resend
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/resend'
-    notes: "Email API for developers. Remote-first. DX/DevRel focused."
-    enabled: true
-
-  - name: Clerk
-    careers_url: https://jobs.ashbyhq.com/clerk
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/clerk'
-    notes: "Auth & user management for developers. SE / TAM / PM roles."
-    enabled: true
-
-  - name: Inngest
-    careers_url: https://jobs.ashbyhq.com/inngest
-    scan_method: websearch
-    scan_query: 'site:jobs.ashbyhq.com/inngest'
-    notes: "Durable workflow engine for serverless. DX/DevRel/Engineering hiring."
-    enabled: true
-
-  - name: PlanetScale
-    careers_url: https://job-boards.greenhouse.io/planetscale
-    api: https://boards-api.greenhouse.io/v1/boards/planetscale/jobs
-    notes: "Serverless MySQL platform. Customer Engineering, Engineering, Sales."
-    enabled: true
-
-  - name: Zep AI
-    careers_url: https://www.getzep.com/careers
-    scan_method: websearch
-    scan_query: '"Zep" "Forward Deployed" OR "Developer Relations" OR "Founding" site:workatastartup.com OR site:getzep.com'
-    notes: "Context engineering platform for AI agents. YC W24. Lead FDE + DevRel Lead roles. US-only currently."
-    enabled: true
-
-  - name: Maxim AI
-    careers_url: https://www.getmaxim.ai/careers
-    scan_method: websearch
-    scan_query: '"Maxim AI" OR "getmaxim" careers "engineer" OR "product"'
-    notes: "AI evaluation and observability platform. Bangalore-based, mostly on-site."
-    enabled: true
-
-
-  # -- India / enterprise SRE watchlist (ATS boards with public APIs) --
-  # Added from the 2026-07 inventory: Greenhouse first; Workday/custom stay
-  # as careers_url notes until a browser/Apify actor covers them.
-
-  - name: Okta
-    careers_url: https://job-boards.greenhouse.io/okta
-    api: https://boards-api.greenhouse.io/v1/boards/okta/jobs
-    notes: "Identity. Six+ SRE openings showed up via Naukri that aggregators missed."
-    enabled: true
-
-  - name: GitLab
-    careers_url: https://job-boards.greenhouse.io/gitlab
-    api: https://boards-api.greenhouse.io/v1/boards/gitlab/jobs
-    notes: "DevOps platform. Heavy remote SRE/Platform hiring."
-    enabled: true
-
-  - name: Postman
-    careers_url: https://job-boards.greenhouse.io/postman
-    api: https://boards-api.greenhouse.io/v1/boards/postman/jobs
-    notes: "API platform. Bangalore + remote."
-    enabled: true
-
-  - name: PhonePe
-    careers_url: https://job-boards.greenhouse.io/phonepe
-    api: https://boards-api.greenhouse.io/v1/boards/phonepe/jobs
-    notes: "India payments. Bangalore."
-    enabled: true
-
-  - name: Razorpay
-    careers_url: https://job-boards.greenhouse.io/razorpaysoftwareprivatelimited
-    api: https://boards-api.greenhouse.io/v1/boards/razorpaysoftwareprivatelimited/jobs
-    notes: "India fintech. Greenhouse board token is razorpaysoftwareprivatelimited."
-    enabled: true
-
-  - name: Groww
-    careers_url: https://job-boards.greenhouse.io/groww
-    api: https://boards-api.greenhouse.io/v1/boards/groww/jobs
-    notes: "India investing. Bangalore."
-    enabled: true
-
-  - name: Slice
-    careers_url: https://job-boards.greenhouse.io/slice
-    api: https://boards-api.greenhouse.io/v1/boards/slice/jobs
-    notes: "India fintech."
-    enabled: true
-
-  - name: HackerRank
-    careers_url: https://job-boards.greenhouse.io/hackerrank
-    api: https://boards-api.greenhouse.io/v1/boards/hackerrank/jobs
-    notes: "Developer platform. Majority of board is Bangalore/Hybrid India."
-    enabled: true
-
-  - name: Thoughtworks
-    careers_url: https://job-boards.greenhouse.io/thoughtworks
-    api: https://boards-api.greenhouse.io/v1/boards/thoughtworks/jobs
-    notes: "Global consultancy with India delivery centers."
-    enabled: true
-
-  - name: Navi
-    careers_url: https://jobs.ashbyhq.com/navi
-    notes: "India fintech (Navi Technologies). Ashby board."
-    enabled: true
-
-  - name: Elastic
-    careers_url: https://job-boards.greenhouse.io/elastic
-    api: https://boards-api.greenhouse.io/v1/boards/elastic/jobs
-    notes: "Observability/search. Bangalore + Mumbai openings."
-    enabled: true
-
-  - name: MongoDB
-    careers_url: https://job-boards.greenhouse.io/mongodb
-    api: https://boards-api.greenhouse.io/v1/boards/mongodb/jobs
-    notes: "Database platform. Bengaluru / Gurugram / Mumbai openings."
-    enabled: true
-
-  - name: Databricks
-    careers_url: https://job-boards.greenhouse.io/databricks
-    api: https://boards-api.greenhouse.io/v1/boards/databricks/jobs
-    notes: "Data platform. Dozens of Bengaluru / Remote-India roles."
-    enabled: true
-
-  - name: Stripe
-    careers_url: https://job-boards.greenhouse.io/stripe
-    api: https://boards-api.greenhouse.io/v1/boards/stripe/jobs
-    notes: "Payments. Bengaluru engineering openings."
-    enabled: true
-
-  # -- Careers pages without a public GH/Lever/Ashby board (watchlist skips them;
-  #    Naukri/Apify/search still surface their openings) --
-
-  - name: Atlassian
-    careers_url: https://www.atlassian.com/company/careers
-    scan_method: websearch
-    scan_query: 'site:www.atlassian.com/company/careers "Site Reliability" OR SRE OR "Platform Engineer"'
-    notes: "Workday-backed. No public Greenhouse board."
-    enabled: true
-
-  - name: Adobe
-    careers_url: https://careers.adobe.com
-    scan_method: websearch
-    scan_query: 'site:careers.adobe.com "Site Reliability" OR SRE OR "Platform Engineer"'
-    notes: "Workday."
-    enabled: true
-
-  - name: Red Hat
-    careers_url: https://careers.redhat.com
-    scan_method: websearch
-    scan_query: 'site:careers.redhat.com "Site Reliability" OR SRE OR "Platform Engineer"'
-    notes: "Workday."
-    enabled: true
-
-  - name: Cisco
-    careers_url: https://jobs.cisco.com
-    scan_method: websearch
-    scan_query: 'site:jobs.cisco.com "Site Reliability" OR SRE OR "Platform Engineer"'
-    notes: "Workday."
-    enabled: true
-
-  - name: Akamai
-    careers_url: https://careers.akamai.com
-    scan_method: websearch
-    scan_query: 'site:careers.akamai.com "Site Reliability" OR SRE OR "Platform Engineer"'
-    enabled: true
-
-  - name: Intuit
-    careers_url: https://jobs.intuit.com
-    scan_method: websearch
-    scan_query: 'site:jobs.intuit.com "Site Reliability" OR SRE OR "Platform Engineer"'
-    notes: "Workday."
-    enabled: true
-
-  - name: Freshworks
-    careers_url: https://www.freshworks.com/company/careers/
-    scan_method: websearch
-    scan_query: 'site:freshworks.com/company/careers "Site Reliability" OR SRE OR "Platform Engineer"'
-    notes: "India + global. No stable public Greenhouse slug found."
-    enabled: true
-
-  - name: Zoho
-    careers_url: https://careers.zoho.com
-    scan_method: websearch
-    scan_query: 'site:careers.zoho.com "Site Reliability" OR SRE OR "Platform Engineer" OR DevOps'
-    notes: "India mid-market. Custom ATS."
-    enabled: true
-
-  - name: Swiggy
-    careers_url: https://careers.swiggy.com
-    scan_method: websearch
-    scan_query: 'site:careers.swiggy.com "Site Reliability" OR SRE OR "Platform Engineer"'
-    enabled: true
-
-  - name: Zomato
-    careers_url: https://www.zomato.com/careers
-    scan_method: websearch
-    scan_query: 'site:zomato.com/careers "Site Reliability" OR SRE OR "Platform Engineer"'
-    enabled: true
-
-  - name: Flipkart
-    careers_url: https://www.flipkartcareers.com
-    scan_method: websearch
-    scan_query: 'site:flipkartcareers.com "Site Reliability" OR SRE OR "Platform Engineer"'
-    enabled: true
-
-  - name: CRED
-    careers_url: https://careers.cred.club
-    scan_method: websearch
-    scan_query: 'site:careers.cred.club OR site:jobs.ashbyhq.com/cred "Site Reliability" OR SRE'
-    enabled: true
-
-  - name: Meesho
-    careers_url: https://jobs.lever.co/meesho
-    notes: "India commerce. Public Lever board (Bangalore-heavy)."
-    enabled: true
-
-  - name: Zerodha
-    careers_url: https://careers.zerodha.com
-    scan_method: websearch
-    scan_query: 'site:careers.zerodha.com "Site Reliability" OR SRE OR "Platform Engineer" OR DevOps'
-    enabled: true
-
-  - name: Microsoft
-    careers_url: https://jobs.careers.microsoft.com
-    scan_method: websearch
-    scan_query: 'site:jobs.careers.microsoft.com "Site Reliability" OR SRE India OR Bangalore'
-    notes: "Custom. Prefer Naukri/LinkedIn for India listings."
-    enabled: true
-
-  - name: Amazon
-    careers_url: https://www.amazon.jobs
-    scan_method: websearch
-    scan_query: 'site:amazon.jobs "Site Reliability" OR SRE Bangalore OR "India"'
-    enabled: true
-
-  - name: Google
-    careers_url: https://www.google.com/about/careers
-    scan_method: websearch
-    scan_query: 'site:careers.google.com "Site Reliability" OR SRE Bangalore OR India'
-    enabled: true
-
-  - name: Apple
-    careers_url: https://jobs.apple.com
-    scan_method: websearch
-    scan_query: 'site:jobs.apple.com "Site Reliability" OR SRE Bangalore OR India'
-    enabled: true
-
-  - name: Oracle
-    careers_url: https://www.oracle.com/careers
-    scan_method: websearch
-    scan_query: 'site:oracle.com/careers "Site Reliability" OR SRE Bangalore'
-    enabled: true
-
-  - name: Walmart Global Tech
-    careers_url: https://careers.walmart.com
-    scan_method: websearch
-    scan_query: 'site:careers.walmart.com "Site Reliability" OR SRE Bangalore OR India'
-    notes: "Workday."
-    enabled: true
-
-  - name: Infosys
-    careers_url: https://www.infosys.com/careers
-    scan_method: websearch
-    scan_query: 'site:infosys.com/careers "Site Reliability" OR SRE OR DevOps'
-    notes: "Surfaced via Naukri with salary bands; careers page is secondary."
-    enabled: true
-
-  - name: Persistent
-    careers_url: https://www.persistent.com/careers
-    scan_method: websearch
-    scan_query: 'site:persistent.com/careers "Site Reliability" OR SRE OR DevOps'
-    notes: "Naukri showed ₹15-25L SRE bands."
-    enabled: true
-
-  - name: Accenture
-    careers_url: https://www.accenture.com/in-en/careers
-    scan_method: websearch
-    scan_query: 'site:accenture.com/in-en/careers "Site Reliability" OR SRE OR DevOps'
-    enabled: true
+- name: Anthropic
+  careers_url: https://job-boards.greenhouse.io/anthropic
+  api: https://boards-api.greenhouse.io/v1/boards/anthropic/jobs
+  enabled: true
+- name: OpenAI
+  careers_url: https://openai.com/careers
+  scan_method: websearch
+  scan_query: site:openai.com/careers "Solutions" OR "Forward Deployed" OR "AI Engineer"
+  enabled: true
+- name: PolyAI
+  careers_url: https://job-boards.eu.greenhouse.io/polyai
+  api: https://boards-api.greenhouse.io/v1/boards/polyai/jobs
+  notes: UK. Voice AI for enterprise contact centers.
+  enabled: true
+- name: Parloa
+  careers_url: https://job-boards.eu.greenhouse.io/parloa
+  api: https://boards-api.greenhouse.io/v1/boards/parloa/jobs
+  notes: Berlin EMEA. Voice AI enterprise.
+  enabled: true
+- name: Intercom
+  careers_url: https://job-boards.greenhouse.io/intercom
+  api: https://boards-api.greenhouse.io/v1/boards/intercom/jobs
+  notes: Dublin EMEA. Fin AI agent.
+  enabled: true
+- name: Hume AI
+  careers_url: https://job-boards.greenhouse.io/humeai
+  api: https://boards-api.greenhouse.io/v1/boards/humeai/jobs
+  notes: NYC. Empathic voice AI.
+  enabled: true
+- name: ElevenLabs
+  careers_url: https://jobs.ashbyhq.com/elevenlabs
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/elevenlabs
+  notes: Voice AI TTS leader.
+  enabled: true
+- name: Deepgram
+  careers_url: https://jobs.ashbyhq.com/deepgram
+  scan_method: websearch
+  scan_query: site:deepgram.com/careers OR "deepgram" "Solutions" OR "AI Engineer" site:jobs.ashbyhq.com
+  notes: STT/TTS APIs.
+  enabled: true
+- name: Vapi
+  careers_url: https://jobs.ashbyhq.com/vapi
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/vapi
+  notes: Voice AI infrastructure.
+  enabled: true
+- name: Bland AI
+  careers_url: https://jobs.ashbyhq.com/bland
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/bland
+  notes: Voice phone agents. $65M Series B.
+  enabled: true
+- name: Retool
+  careers_url: https://retool.com/careers
+  scan_method: websearch
+  scan_query: site:retool.com/careers "Deployed" OR "AI" OR "Solutions"
+  notes: London. Popularized Deployed Engineer role.
+  enabled: true
+- name: Airtable
+  careers_url: https://job-boards.greenhouse.io/airtable
+  api: https://boards-api.greenhouse.io/v1/boards/airtable/jobs
+  notes: No-code + AI platform.
+  enabled: true
+- name: Vercel
+  careers_url: https://job-boards.greenhouse.io/vercel
+  api: https://boards-api.greenhouse.io/v1/boards/vercel/jobs
+  notes: AI SDK, v0.dev. Frontend AI tooling.
+  enabled: true
+- name: Temporal
+  careers_url: https://job-boards.greenhouse.io/temporal
+  api: https://boards-api.greenhouse.io/v1/boards/temporal/jobs
+  notes: Workflow orchestration.
+  enabled: true
+- name: Arize AI
+  careers_url: https://job-boards.greenhouse.io/arizeai
+  api: https://boards-api.greenhouse.io/v1/boards/arizeai/jobs
+  notes: LLMOps / AI observability.
+  enabled: true
+- name: RunPod
+  careers_url: https://job-boards.greenhouse.io/runpod
+  api: https://boards-api.greenhouse.io/v1/boards/runpod/jobs
+  notes: GPU cloud for AI.
+  enabled: true
+- name: Glean
+  careers_url: https://job-boards.greenhouse.io/gleanwork
+  api: https://boards-api.greenhouse.io/v1/boards/gleanwork/jobs
+  notes: Enterprise AI search.
+  enabled: true
+- name: Ada
+  careers_url: https://job-boards.greenhouse.io/ada
+  scan_method: websearch
+  scan_query: '"ada.cx" OR "ada" "AI" "Solutions" OR "Engineer" site:jobs.ashbyhq.com OR site:job-boards.greenhouse.io'
+  notes: Toronto + remote. AI customer service.
+  enabled: true
+- name: LivePerson
+  careers_url: https://liveperson.com/company/careers
+  scan_method: websearch
+  scan_query: site:liveperson.com/careers OR "liveperson" "Solutions" OR "AI" site:job-boards.greenhouse.io
+  notes: Remote EMEA. Conversational AI enterprise.
+  enabled: true
+- name: Sierra
+  careers_url: https://jobs.ashbyhq.com/sierra
+  scan_method: websearch
+  scan_query: '"sierra.ai" "AI" "Forward Deployed" OR "Applied" OR "Solutions" site:jobs.ashbyhq.com'
+  notes: Bret Taylor (ex-CEO Salesforce). AI customer agents.
+  enabled: true
+- name: Decagon
+  careers_url: https://jobs.ashbyhq.com/decagon
+  scan_method: websearch
+  scan_query: '"decagon" "AI" "Forward Deployed" OR "Solutions" site:jobs.ashbyhq.com'
+  notes: AI customer support agents.
+  enabled: true
+- name: Talkdesk
+  careers_url: https://www.talkdesk.com/careers
+  scan_method: websearch
+  scan_query: site:talkdesk.com/careers "AI" OR "Solutions Architect" OR "AI Engineer"
+  notes: Lisbon. Contact center AI. EMEA friendly.
+  enabled: true
+- name: Twilio
+  careers_url: https://job-boards.greenhouse.io/twilio
+  api: https://boards-api.greenhouse.io/v1/boards/twilio/jobs
+  notes: Voice/messaging. ~25 India/Remote-India roles on Greenhouse.
+  enabled: true
+- name: Dialpad
+  careers_url: https://www.dialpad.com/careers
+  scan_method: websearch
+  scan_query: '"dialpad" "AI" "Solutions" OR "Engineer" site:job-boards.greenhouse.io OR site:jobs.ashbyhq.com'
+  notes: Voice AI for business comms.
+  enabled: true
+- name: Gong
+  careers_url: https://job-boards.greenhouse.io/gongio
+  api: https://boards-api.greenhouse.io/v1/boards/gongio/jobs
+  notes: Revenue intelligence. Greenhouse board token is gongio (GCC Journal live feed).
+  enabled: true
+- name: Genesys
+  careers_url: https://www.genesys.com/careers
+  scan_method: websearch
+  scan_query: site:genesys.com/careers "AI" "Solutions Architect" OR "AI Engineer"
+  notes: Contact center cloud + AI.
+  enabled: true
+- name: Salesforce
+  careers_url: https://www.salesforce.com/company/careers/locations/india/
+  scan_method: playwright
+  scan_query: site:careers.salesforce.com "Forward Deployed" OR "AI Engineer" OR "Agentforce"
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Langfuse
+  careers_url: https://langfuse.com/careers
+  scan_method: websearch
+  scan_query: '"langfuse" careers OR jobs "engineer" OR "solutions"'
+  notes: Berlin. LLMOps / observability.
+  enabled: true
+- name: Lindy
+  careers_url: https://jobs.ashbyhq.com/lindy
+  scan_method: websearch
+  scan_query: '"lindy.ai" "AI" "Forward Deployed" OR "Solutions" site:jobs.ashbyhq.com'
+  notes: AI agent management platform.
+  enabled: true
+- name: Cognigy
+  careers_url: https://careers.cognigy.com
+  scan_method: websearch
+  scan_query: '"cognigy" careers "AI" OR "Solutions" OR "Engineer"'
+  notes: Dusseldorf EMEA. Conversational AI enterprise.
+  enabled: true
+- name: Speechmatics
+  careers_url: https://job-boards.greenhouse.io/speechmatics
+  api: https://boards-api.greenhouse.io/v1/boards/speechmatics/jobs
+  notes: Cambridge UK. Speech recognition platform.
+  enabled: true
+- name: n8n
+  careers_url: https://jobs.ashbyhq.com/n8n
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/n8n
+  notes: Berlin + remote EU/US. Workflow automation.
+  enabled: true
+- name: Zapier
+  careers_url: https://jobs.ashbyhq.com/zapier
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/zapier
+  notes: Remote-first. Automation platform leader.
+  enabled: true
+- name: Make.com (Celonis)
+  careers_url: https://www.make.com/en/careers
+  scan_method: websearch
+  scan_query: site:make.com/en/careers OR "make.com" "engineer" OR "solutions" site:jobs.ashbyhq.com
+  notes: Celonis parent company. Automation platform.
+  enabled: true
+- name: Cohere
+  careers_url: https://jobs.ashbyhq.com/cohere
+  notes: AI/LLM provider. Toronto + remote.
+  enabled: true
+- name: LangChain
+  careers_url: https://jobs.ashbyhq.com/langchain
+  notes: LangChain/LangSmith framework.
+  enabled: true
+- name: Pinecone
+  careers_url: https://jobs.ashbyhq.com/pinecone
+  notes: Vector database.
+  enabled: true
+- name: Mistral AI
+  careers_url: https://jobs.lever.co/mistral
+  notes: Paris. European AI lab.
+  enabled: true
+- name: Weights & Biases
+  careers_url: https://jobs.lever.co/wandb
+  notes: MLOps platform.
+  enabled: true
+- name: Palantir
+  careers_url: https://jobs.lever.co/palantir
+  notes: FDE roles. Mostly US/London.
+  enabled: true
+- name: Factorial
+  careers_url: https://job-boards.greenhouse.io/factorial
+  scan_method: websearch
+  scan_query: site:jobs.greenhouse.io/factorial
+  notes: Barcelona. HR SaaS unicorn.
+  enabled: true
+- name: Attio
+  careers_url: https://jobs.ashbyhq.com/attio
+  scan_method: websearch
+  scan_query: site:attio.com/careers OR site:jobs.ashbyhq.com/attio
+  notes: Remote EU. AI-native CRM. Series B $52M.
+  enabled: true
+- name: Tinybird
+  careers_url: https://jobs.ashbyhq.com/tinybird
+  scan_method: websearch
+  scan_query: site:tinybird.co/careers OR site:jobs.ashbyhq.com/tinybird
+  notes: Remote. Real-time data platform.
+  enabled: true
+- name: Clarity AI
+  careers_url: https://jobs.lever.co/clarity-ai
+  scan_method: websearch
+  scan_query: site:clarity.ai/careers OR site:jobs.lever.co/clarity-ai
+  notes: Madrid/Remote. Sustainability analytics with AI.
+  enabled: true
+- name: Travelperk
+  careers_url: https://jobs.ashbyhq.com/travelperk
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/travelperk
+  notes: Barcelona. Business travel unicorn.
+  enabled: true
+- name: Aleph Alpha
+  careers_url: https://jobs.ashbyhq.com/AlephAlpha
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/AlephAlpha
+  notes: Heidelberg DE. Sovereign European LLM provider, enterprise & government focus.
+  enabled: true
+- name: DeepL
+  careers_url: https://jobs.ashbyhq.com/DeepL
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/DeepL
+  notes: Cologne DE. Translation & language AI. 60+ open roles, EU/DACH heavy.
+  enabled: true
+- name: Black Forest Labs
+  careers_url: https://job-boards.greenhouse.io/blackforestlabs
+  api: https://boards-api.greenhouse.io/v1/boards/blackforestlabs/jobs
+  notes: Freiburg DE / SF. FLUX image models, ex-Stable Diffusion team.
+  enabled: true
+- name: Helsing
+  careers_url: https://job-boards.greenhouse.io/helsing
+  api: https://boards-api.greenhouse.io/v1/boards/helsing/jobs
+  notes: Munich / Berlin / London / Paris. Defence AI unicorn. 100+ roles, ML & FDE.
+  enabled: true
+- name: Celonis
+  careers_url: https://job-boards.greenhouse.io/celonis
+  api: https://boards-api.greenhouse.io/v1/boards/celonis/jobs
+  notes: Munich / NYC. Process intelligence, Applied AI Engineer roles, Field CTOs.
+  enabled: true
+- name: Contentful
+  careers_url: https://job-boards.greenhouse.io/contentful
+  api: https://boards-api.greenhouse.io/v1/boards/contentful/jobs
+  notes: Berlin / Denver. Headless CMS, AI content workflows.
+  enabled: true
+- name: GetYourGuide
+  careers_url: https://job-boards.greenhouse.io/getyourguide
+  api: https://boards-api.greenhouse.io/v1/boards/getyourguide/jobs
+  notes: Berlin. Travel marketplace, ML & data platform roles.
+  enabled: true
+- name: HelloFresh
+  careers_url: https://job-boards.greenhouse.io/hellofresh
+  api: https://boards-api.greenhouse.io/v1/boards/hellofresh/jobs
+  notes: Berlin. Meal kit unicorn, large data/ML org.
+  enabled: true
+- name: N26
+  careers_url: https://job-boards.greenhouse.io/n26
+  api: https://boards-api.greenhouse.io/v1/boards/n26/jobs
+  notes: Berlin / Barcelona. Mobile bank, ~50 roles, ML & risk.
+  enabled: true
+- name: Trade Republic
+  careers_url: https://job-boards.greenhouse.io/traderepublicbank
+  api: https://boards-api.greenhouse.io/v1/boards/traderepublicbank/jobs
+  notes: Berlin / London / Paris. Neobroker, ~50 roles, platform & data.
+  enabled: true
+- name: SumUp
+  careers_url: https://job-boards.greenhouse.io/sumup
+  api: https://boards-api.greenhouse.io/v1/boards/sumup/jobs
+  notes: Berlin / London. Payments fintech, EU + LATAM hiring.
+  enabled: true
+- name: Qonto
+  careers_url: https://jobs.lever.co/qonto
+  notes: Paris / Berlin / Barcelona / Milan. SMB neobank, MLOps for AI Product roles.
+  enabled: true
+- name: Forto
+  careers_url: https://jobs.lever.co/forto
+  notes: Berlin DE. Digital freight forwarder, product & data roles, German + English.
+  enabled: true
+- name: Lakera
+  careers_url: https://jobs.ashbyhq.com/lakera.ai
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/lakera.ai
+  notes: Zurich CH / SF. AI security & guardrails. Has Forward Deployed Engineer roles.
+  enabled: true
+- name: Scandit
+  careers_url: https://job-boards.greenhouse.io/scandit
+  api: https://boards-api.greenhouse.io/v1/boards/scandit/jobs
+  notes: Zurich CH. Computer vision / smart data capture, ML roles.
+  enabled: true
+- name: Cradle
+  careers_url: https://jobs.ashbyhq.com/cradlebio
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/cradlebio
+  notes: Zurich CH / Amsterdam. AI-guided protein design, ML researcher roles.
+  enabled: true
+- name: Hugging Face
+  careers_url: https://apply.workable.com/huggingface/
+  scan_method: websearch
+  scan_query: site:apply.workable.com/huggingface
+  notes: Paris / NYC / Remote. ML hub & open-source models.
+  enabled: true
+- name: Photoroom
+  careers_url: https://jobs.ashbyhq.com/photoroom
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/photoroom
+  notes: Paris FR. AI photo editor, Head of CV / Head of ML roles.
+  enabled: true
+- name: Pigment
+  careers_url: https://jobs.lever.co/pigment
+  notes: Paris FR / NYC / London. AI-powered FP&A planning platform.
+  enabled: true
+- name: Wayve
+  careers_url: https://job-boards.greenhouse.io/wayve
+  api: https://boards-api.greenhouse.io/v1/boards/wayve/jobs
+  notes: London UK. Embodied AI for self-driving, ML & robotics roles.
+  enabled: true
+- name: Isomorphic Labs
+  careers_url: https://job-boards.greenhouse.io/isomorphiclabs
+  api: https://boards-api.greenhouse.io/v1/boards/isomorphiclabs/jobs
+  notes: London / Lausanne / Cambridge MA. DeepMind spin-out for drug discovery AI.
+  enabled: true
+- name: PhysicsX
+  careers_url: https://job-boards.greenhouse.io/physicsx
+  api: https://boards-api.greenhouse.io/v1/boards/physicsx/jobs
+  notes: London UK. Physics-informed ML for engineering, ~40 roles.
+  enabled: true
+- name: Stability AI
+  careers_url: https://job-boards.greenhouse.io/stabilityai
+  api: https://boards-api.greenhouse.io/v1/boards/stabilityai/jobs
+  notes: London / SF. Generative AI image/video research lab.
+  enabled: true
+- name: Synthesia
+  careers_url: https://jobs.ashbyhq.com/synthesia
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/synthesia OR site:job-boards.greenhouse.io/synthesia
+  notes: London UK. AI video generation for enterprise, $4B valuation.
+  enabled: true
+- name: Faculty
+  careers_url: https://jobs.ashbyhq.com/faculty
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/faculty
+  notes: London UK. Applied AI consultancy. 80+ roles, AI Safety / MLE / Delivery.
+  enabled: true
+- name: Causaly
+  careers_url: https://jobs.ashbyhq.com/causaly
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/causaly
+  notes: London / Athens. Biomedical knowledge graph + AI.
+  enabled: true
+- name: Lovable
+  careers_url: https://jobs.ashbyhq.com/lovable
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/lovable
+  notes: Stockholm SE. AI app builder (text-to-app), 80+ open roles.
+  enabled: true
+- name: Legora
+  careers_url: https://jobs.ashbyhq.com/legora
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/legora
+  notes: Stockholm SE / NYC / London. AI-native legal workspace.
+  enabled: true
+- name: Spotify
+  careers_url: https://jobs.lever.co/spotify
+  notes: Stockholm SE / NYC / London. Audio platform, large ML/personalization org.
+  enabled: true
+- name: Vinted
+  careers_url: https://jobs.lever.co/vinted
+  notes: Vilnius LT / Berlin. C2C marketplace unicorn, data science & ML roles.
+  enabled: true
+- name: Amplemarket
+  careers_url: https://job-boards.greenhouse.io/amplemarket
+  api: https://boards-api.greenhouse.io/v1/boards/amplemarket/jobs
+  notes: Lisbon PT / Remote. AI-native sales platform.
+  enabled: true
+- name: Perplexity
+  careers_url: https://jobs.ashbyhq.com/perplexity
+  scan_method: websearch
+  scan_query: ‘site:jobs.ashbyhq.com/perplexity "AI" OR "Applied AI" OR "Forward Deployed" OR "Engineer"’
+  notes: AI-native search and enterprise AI platform.
+  enabled: true
+- name: Clay Labs
+  careers_url: https://jobs.ashbyhq.com/claylabs
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/claylabs "AI" OR "Developer Experience" OR "Growth" OR "Engineer"
+  notes: AI-native GTM and workflow automation platform.
+  enabled: true
+- name: Runway
+  careers_url: https://job-boards.greenhouse.io/runwayml
+  api: https://boards-api.greenhouse.io/v1/boards/runwayml/jobs
+  notes: Generative AI video and creative tooling platform.
+  enabled: true
+- name: Hightouch
+  careers_url: https://job-boards.greenhouse.io/hightouch
+  api: https://boards-api.greenhouse.io/v1/boards/hightouch/jobs
+  notes: Data activation platform with AI agents and solutions engineering roles.
+  enabled: true
+- name: WorkOS
+  careers_url: https://jobs.ashbyhq.com/workos
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/workos "Solutions Engineer" OR "Developer Success" OR "Engineer"
+  notes: Developer tools and enterprise-ready auth/platform APIs.
+  enabled: true
+- name: Supabase
+  careers_url: https://jobs.ashbyhq.com/supabase
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/supabase
+  notes: Open-source Firebase alternative. Remote-first. Postgres + Auth + Storage. Strong DevRel/DX hiring.
+  enabled: true
+- name: Resend
+  careers_url: https://jobs.ashbyhq.com/resend
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/resend
+  notes: Email API for developers. Remote-first. DX/DevRel focused.
+  enabled: true
+- name: Clerk
+  careers_url: https://jobs.ashbyhq.com/clerk
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/clerk
+  notes: Auth & user management for developers. SE / TAM / PM roles.
+  enabled: true
+- name: Inngest
+  careers_url: https://jobs.ashbyhq.com/inngest
+  scan_method: websearch
+  scan_query: site:jobs.ashbyhq.com/inngest
+  notes: Durable workflow engine for serverless. DX/DevRel/Engineering hiring.
+  enabled: true
+- name: PlanetScale
+  careers_url: https://job-boards.greenhouse.io/planetscale
+  api: https://boards-api.greenhouse.io/v1/boards/planetscale/jobs
+  notes: Serverless MySQL platform. Customer Engineering, Engineering, Sales.
+  enabled: true
+- name: Zep AI
+  careers_url: https://www.getzep.com/careers
+  scan_method: websearch
+  scan_query: '"Zep" "Forward Deployed" OR "Developer Relations" OR "Founding" site:workatastartup.com
+    OR site:getzep.com'
+  notes: Context engineering platform for AI agents. YC W24. Lead FDE + DevRel Lead roles. US-only currently.
+  enabled: true
+- name: Maxim AI
+  careers_url: https://www.getmaxim.ai/careers
+  scan_method: websearch
+  scan_query: '"Maxim AI" OR "getmaxim" careers "engineer" OR "product"'
+  notes: AI evaluation and observability platform. Bangalore-based, mostly on-site.
+  enabled: true
+- name: Okta
+  careers_url: https://job-boards.greenhouse.io/okta
+  api: https://boards-api.greenhouse.io/v1/boards/okta/jobs
+  notes: Identity. Six+ SRE openings showed up via Naukri that aggregators missed.
+  enabled: true
+- name: GitLab
+  careers_url: https://job-boards.greenhouse.io/gitlab
+  api: https://boards-api.greenhouse.io/v1/boards/gitlab/jobs
+  notes: DevOps platform. Heavy remote SRE/Platform hiring.
+  enabled: true
+- name: Postman
+  careers_url: https://job-boards.greenhouse.io/postman
+  api: https://boards-api.greenhouse.io/v1/boards/postman/jobs
+  notes: API platform. Bangalore + remote.
+  enabled: true
+- name: PhonePe
+  careers_url: https://job-boards.greenhouse.io/phonepe
+  api: https://boards-api.greenhouse.io/v1/boards/phonepe/jobs
+  notes: India payments. Bangalore.
+  enabled: true
+- name: Razorpay
+  careers_url: https://job-boards.greenhouse.io/razorpaysoftwareprivatelimited
+  api: https://boards-api.greenhouse.io/v1/boards/razorpaysoftwareprivatelimited/jobs
+  notes: India fintech. Greenhouse board token is razorpaysoftwareprivatelimited.
+  enabled: true
+- name: Groww
+  careers_url: https://job-boards.greenhouse.io/groww
+  api: https://boards-api.greenhouse.io/v1/boards/groww/jobs
+  notes: India investing. Bangalore.
+  enabled: true
+- name: Slice
+  careers_url: https://job-boards.greenhouse.io/slice
+  api: https://boards-api.greenhouse.io/v1/boards/slice/jobs
+  notes: India fintech.
+  enabled: true
+- name: HackerRank
+  careers_url: https://job-boards.greenhouse.io/hackerrank
+  api: https://boards-api.greenhouse.io/v1/boards/hackerrank/jobs
+  notes: Developer platform. Majority of board is Bangalore/Hybrid India.
+  enabled: true
+- name: Thoughtworks
+  careers_url: https://job-boards.greenhouse.io/thoughtworks
+  api: https://boards-api.greenhouse.io/v1/boards/thoughtworks/jobs
+  notes: Global consultancy with India delivery centers.
+  enabled: true
+- name: Navi
+  careers_url: https://jobs.ashbyhq.com/navi
+  notes: India fintech (Navi Technologies). Ashby board.
+  enabled: true
+- name: Elastic
+  careers_url: https://job-boards.greenhouse.io/elastic
+  api: https://boards-api.greenhouse.io/v1/boards/elastic/jobs
+  notes: Observability/search. Bangalore + Mumbai openings.
+  enabled: true
+- name: MongoDB
+  careers_url: https://job-boards.greenhouse.io/mongodb
+  api: https://boards-api.greenhouse.io/v1/boards/mongodb/jobs
+  notes: Database platform. Bengaluru / Gurugram / Mumbai openings.
+  enabled: true
+- name: Databricks
+  careers_url: https://job-boards.greenhouse.io/databricks
+  api: https://boards-api.greenhouse.io/v1/boards/databricks/jobs
+  notes: Data platform. Dozens of Bengaluru / Remote-India roles.
+  enabled: true
+- name: Stripe
+  careers_url: https://job-boards.greenhouse.io/stripe
+  api: https://boards-api.greenhouse.io/v1/boards/stripe/jobs
+  notes: Payments. Bengaluru engineering openings.
+  enabled: true
+- name: Atlassian
+  careers_url: https://www.atlassian.com/company/careers
+  scan_method: playwright
+  scan_query: site:www.atlassian.com/company/careers "Site Reliability" OR SRE OR "Platform Engineer"
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Adobe
+  careers_url: https://www.adobe.com/careers.html
+  scan_method: playwright
+  scan_query: site:careers.adobe.com "Site Reliability" OR SRE OR "Platform Engineer"
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Red Hat
+  careers_url: https://redhat.wd5.myworkdayjobs.com/jobs
+  scan_method: workday
+  notes: Workday tenant=redhat site=jobs (from ATS detection CSV)
+  enabled: true
+- name: Cisco
+  careers_url: https://jobs.cisco.com/
+  scan_method: playwright
+  scan_query: site:jobs.cisco.com "Site Reliability" OR SRE OR "Platform Engineer"
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Akamai
+  careers_url: https://careers.akamai.com
+  scan_method: websearch
+  scan_query: site:careers.akamai.com "Site Reliability" OR SRE OR "Platform Engineer"
+  enabled: true
+- name: Intuit
+  careers_url: https://www.intuit.com/in/careers/
+  scan_method: playwright
+  scan_query: site:jobs.intuit.com "Site Reliability" OR SRE OR "Platform Engineer"
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Freshworks
+  careers_url: https://careers.smartrecruiters.com/Freshworks
+  scan_method: playwright
+  scan_query: site:freshworks.com/company/careers "Site Reliability" OR SRE OR "Platform Engineer"
+  notes: SmartRecruiters board detected — Playwright careers crawl
+  enabled: true
+- name: Zoho
+  careers_url: https://careers.zoho.com
+  scan_method: websearch
+  scan_query: site:careers.zoho.com "Site Reliability" OR SRE OR "Platform Engineer" OR DevOps
+  notes: India mid-market. Custom ATS.
+  enabled: true
+- name: Swiggy
+  careers_url: https://careers.swiggy.com
+  scan_method: websearch
+  scan_query: site:careers.swiggy.com "Site Reliability" OR SRE OR "Platform Engineer"
+  enabled: true
+- name: Zomato
+  careers_url: https://www.zomato.com/careers
+  scan_method: websearch
+  scan_query: site:zomato.com/careers "Site Reliability" OR SRE OR "Platform Engineer"
+  enabled: true
+- name: Flipkart
+  careers_url: https://www.flipkartcareers.com
+  scan_method: websearch
+  scan_query: site:flipkartcareers.com "Site Reliability" OR SRE OR "Platform Engineer"
+  enabled: true
+- name: CRED
+  careers_url: https://careers.cred.club
+  scan_method: websearch
+  scan_query: site:careers.cred.club OR site:jobs.ashbyhq.com/cred "Site Reliability" OR SRE
+  enabled: true
+- name: Meesho
+  careers_url: https://jobs.lever.co/meesho
+  notes: India commerce. Public Lever board (Bangalore-heavy).
+  enabled: true
+- name: Zerodha
+  careers_url: https://careers.zerodha.com
+  scan_method: websearch
+  scan_query: site:careers.zerodha.com "Site Reliability" OR SRE OR "Platform Engineer" OR DevOps
+  enabled: true
+- name: Microsoft
+  careers_url: https://careers.microsoft.com/
+  scan_method: playwright
+  scan_query: site:jobs.careers.microsoft.com "Site Reliability" OR SRE India OR Bangalore
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Amazon
+  careers_url: https://www.amazon.jobs/
+  scan_method: playwright
+  scan_query: site:amazon.jobs "Site Reliability" OR SRE Bangalore OR "India"
+  enabled: true
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+- name: Google
+  careers_url: https://careers.google.com/
+  scan_method: playwright
+  scan_query: site:careers.google.com "Site Reliability" OR SRE Bangalore OR India
+  enabled: true
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+- name: Apple
+  careers_url: https://jobs.apple.com/
+  scan_method: playwright
+  scan_query: site:jobs.apple.com "Site Reliability" OR SRE Bangalore OR India
+  enabled: true
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+- name: Oracle
+  careers_url: https://www.oracle.com/in/careers/
+  scan_method: playwright
+  scan_query: site:oracle.com/careers "Site Reliability" OR SRE Bangalore
+  enabled: true
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+- name: Walmart Global Tech
+  careers_url: https://careers.walmart.com
+  scan_method: websearch
+  scan_query: site:careers.walmart.com "Site Reliability" OR SRE Bangalore OR India
+  notes: Workday.
+  enabled: true
+- name: Infosys
+  careers_url: https://www.infosys.com/careers.html
+  scan_method: playwright
+  scan_query: site:infosys.com/careers "Site Reliability" OR SRE OR DevOps
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Persistent
+  careers_url: https://www.persistent.com/careers
+  scan_method: websearch
+  scan_query: site:persistent.com/careers "Site Reliability" OR SRE OR DevOps
+  notes: Naukri showed ₹15-25L SRE bands.
+  enabled: true
+- name: Accenture
+  careers_url: https://accenture.wd103.myworkdayjobs.com/AccentureCareers
+  scan_method: workday
+  enabled: true
+  notes: Workday tenant=accenture site=AccentureCareers (from ATS detection CSV)
+- name: Figma
+  careers_url: https://job-boards.greenhouse.io/figma
+  api: https://boards-api.greenhouse.io/v1/boards/figma/jobs
+  notes: Design tooling. Greenhouse feed used by GCC Journal job board.
+  enabled: true
+- name: LinkedIn
+  careers_url: https://job-boards.greenhouse.io/linkedin
+  api: https://boards-api.greenhouse.io/v1/boards/linkedin/jobs
+  notes: Microsoft-owned. Greenhouse feed used by GCC Journal job board.
+  enabled: true
+- name: Coinbase
+  careers_url: https://job-boards.greenhouse.io/coinbase
+  api: https://boards-api.greenhouse.io/v1/boards/coinbase/jobs
+  notes: Crypto. Greenhouse feed used by GCC Journal job board.
+  enabled: true
+- name: Robinhood
+  careers_url: https://job-boards.greenhouse.io/robinhood
+  api: https://boards-api.greenhouse.io/v1/boards/robinhood/jobs
+  notes: Fintech brokerage. Greenhouse feed used by GCC Journal job board.
+  enabled: true
+- name: AB InBev
+  careers_url: https://job-boards.greenhouse.io/abinbev
+  api: https://boards-api.greenhouse.io/v1/boards/abinbev/jobs
+  notes: CPG GCC. Greenhouse feed used by GCC Journal job board.
+  enabled: true
+- name: Cloudflare
+  careers_url: https://job-boards.greenhouse.io/cloudflare
+  api: https://boards-api.greenhouse.io/v1/boards/cloudflare/jobs
+  notes: Edge/CDN. Public board is Greenhouse (GCC Journal listed Lever; Lever slug 404).
+  enabled: true
+- name: Grafana Labs
+  careers_url: https://job-boards.greenhouse.io/grafanalabs
+  api: https://boards-api.greenhouse.io/v1/boards/grafanalabs/jobs
+  notes: Observability. Greenhouse board token is grafanalabs.
+  enabled: true
+- name: Rubrik
+  careers_url: https://job-boards.greenhouse.io/rubrik
+  api: https://boards-api.greenhouse.io/v1/boards/rubrik/jobs
+  notes: Data security. Greenhouse feed (GCC Journal listed Lever; Lever slug 404).
+  enabled: true
+- name: 1Password
+  careers_url: https://jobs.ashbyhq.com/1password
+  notes: Password manager. Ashby board (GCC Journal listed Lever; Lever slug 404).
+  enabled: true
+- name: Uber
+  careers_url: https://www.uber.com/careers/
+  scan_method: playwright
+  scan_query: site:uber.com/careers India OR Bengaluru OR Bangalore OR Hyderabad
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Netflix
+  careers_url: https://jobs.netflix.com/
+  scan_method: playwright
+  scan_query: site:jobs.netflix.com India OR Bengaluru OR Bangalore
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Zendesk
+  careers_url: https://zendesk.wd1.myworkdayjobs.com/zendesk
+  scan_method: workday
+  notes: Workday board from ATS detection CSV
+  enabled: true
+- name: Palo Alto Networks
+  careers_url: https://paloaltonetworks.wd5.myworkdayjobs.com/panwexternalcareers
+  scan_method: workday
+  notes: Workday board from ATS detection CSV
+  enabled: true
+- name: HashiCorp
+  careers_url: https://www.hashicorp.com/careers
+  scan_method: playwright
+  scan_query: site:hashicorp.com/careers OR site:ibm.com/careers HashiCorp India OR Bengaluru
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: BrowserStack
+  careers_url: https://www.browserstack.com/careers
+  scan_method: websearch
+  scan_query: site:browserstack.com/careers India OR Mumbai OR Bengaluru
+  notes: GCC Journal Lever slug 'browserstack' returns 404 — no public board found.
+  enabled: true
+- name: Ascendion India
+  careers_url: https://ascendion.com/careers/india/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Tata Consultancy Services (TCS) India
+  careers_url: https://www.tcs.com/careers/india
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Ultimate Software
+  careers_url: https://www.ultimatesoftware.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Workday
+  careers_url: https://workday.wd5.myworkdayjobs.com/Workday
+  scan_method: workday
+  notes: Workday tenant=workday site=Workday (from ATS detection CSV)
+  enabled: true
+- name: HubSpot
+  careers_url: https://www.hubspot.com/jobs/search
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Zillow Group
+  careers_url: https://zillow.wd5.myworkdayjobs.com/Zillow_Group_External
+  scan_method: workday
+  notes: Workday tenant=zillow site=Zillow_Group_External (from ATS detection CSV)
+  enabled: true
+- name: SAP
+  careers_url: https://www.sap.com/about/careers.html
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: World Wide Technology
+  careers_url: https://www.wwt.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Fast Enterprises
+  careers_url: https://www.fastenterprises.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: NVIDIA
+  careers_url: https://www.nvidia.com/en-us/about-nvidia/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: New Relic
+  careers_url: https://newrelic.com/about/culture
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Dropbox
+  careers_url: https://www.dropbox.com/jobs
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Kronos Incorporated
+  careers_url: https://www.kronos.com/about-us/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Box
+  careers_url: https://www.box.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Workiva
+  careers_url: https://workiva.wd503.myworkdayjobs.com/careers
+  scan_method: workday
+  notes: Workday tenant=workiva site=careers (from ATS detection CSV)
+  enabled: true
+- name: Hyland
+  careers_url: https://careers-hyland.icims.com/jobs/search
+  scan_method: playwright
+  notes: iCIMS board detected — Playwright / careers crawl (no public JSON watchlist yet)
+  enabled: true
+- name: Indeed
+  careers_url: https://www.indeed.jobs/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: SAS Institute
+  careers_url: https://globalcareers-sas.icims.com/jobs/intro
+  scan_method: playwright
+  notes: iCIMS board detected — Playwright / careers crawl (no public JSON watchlist yet)
+  enabled: true
+- name: Insight Enterprises
+  careers_url: https://www.insight.com/en_US/careers.html
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: HP Inc.
+  careers_url: https://www8.hp.com/us/en/jobs/index.html
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Medidata Solutions
+  careers_url: https://www.medidata.com/en/careers/job-search/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Asana
+  careers_url: https://asana.com/jobs
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: MuleSoft
+  careers_url: https://www.mulesoft.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Pluralsight
+  careers_url: https://pluralsight.wd1.myworkdayjobs.com/Careers
+  scan_method: workday
+  notes: Workday board from ATS detection CSV
+  enabled: true
+- name: Pariveda Solutions
+  careers_url: https://www.parivedasolutions.com/privacy/careers-overview
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: SurveyMonkey
+  careers_url: https://www.surveymonkey.com/mp/jobs/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Meta (Facebook)
+  careers_url: https://www.metacareers.com/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Tesla
+  careers_url: https://www.tesla.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: IBM
+  careers_url: https://www.ibm.com/employment/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Intel
+  careers_url: https://intel.wd1.myworkdayjobs.com/External
+  scan_method: workday
+  notes: Workday tenant=intel site=External (from ATS detection CSV)
+  enabled: true
+- name: VMware
+  careers_url: https://careers.vmware.com/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Shopify
+  careers_url: https://www.shopify.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Slack
+  careers_url: https://salesforce.wd12.myworkdayjobs.com/Slack
+  scan_method: workday
+  notes: Workday tenant=salesforce site=Slack (from ATS detection CSV)
+  enabled: true
+- name: Twitter
+  careers_url: https://job-boards.greenhouse.io/xai
+  api: https://boards-api.greenhouse.io/v1/boards/xai/jobs
+  notes: Greenhouse board from companies_ats_boards_detected.csv
+  enabled: true
+- name: Zoom
+  careers_url: https://zoom.us/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Airbnb
+  careers_url: https://www.airbnb.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Lyft
+  careers_url: https://www.lyft.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Tableau
+  careers_url: https://www.tableau.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: CrowdStrike
+  careers_url: https://crowdstrike.wd5.myworkdayjobs.com/crowdstrikecareers
+  scan_method: workday
+  notes: Workday tenant=crowdstrike site=crowdstrikecareers (from ATS detection CSV)
+  enabled: true
+- name: GitHub
+  careers_url: https://careers-githubinc.icims.com/jobs/login
+  scan_method: playwright
+  notes: iCIMS board detected — Playwright / careers crawl (no public JSON watchlist yet)
+  enabled: true
+- name: Coupang
+  careers_url: https://www.coupang.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Snowflake
+  careers_url: https://www.snowflake.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Wipro
+  careers_url: https://careers.wipro.com/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: HCLTech
+  careers_url: https://www.hcltech.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Tech Mahindra
+  careers_url: https://careers.techmahindra.com/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: LTIMindtree
+  careers_url: https://www.ltimindtree.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Cognizant India
+  careers_url: https://careers.cognizant.com/in/en
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Capgemini India
+  careers_url: https://www.capgemini.com/in-en/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Mphasis
+  careers_url: https://careers.mphasis.com/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Coforge
+  careers_url: https://www.coforge.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Persistent Systems
+  careers_url: https://www.persistent.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: L&T Technology Services (LTTS)
+  careers_url: https://www.ltts.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: LTI (legacy)
+  careers_url: https://www.lntinfotech.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Hexaware Technologies
+  careers_url: https://hexaware.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Zensar Technologies
+  careers_url: https://www.zensar.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Birlasoft
+  careers_url: https://www.birlasoft.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Sonata Software
+  careers_url: https://www.sonata-software.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: NIIT Technologies (Coforge legacy)
+  careers_url: https://www.niit-tech.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Appinventiv
+  careers_url: https://appinventiv.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: TatvaSoft
+  careers_url: https://www.tatvasoft.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Cigniti Technologies
+  careers_url: https://www.cigniti.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Sagar Informatics
+  careers_url: https://www.sagarinfotech.com/career.html
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: CONTUS Tech
+  careers_url: https://www.contus.com/careers.php
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Simform
+  careers_url: https://www.simform.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Radixweb
+  careers_url: https://radixweb.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Pace Wisdom Solutions
+  careers_url: https://pacewisdom.com/career/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Navsoft (Navigators Software)
+  careers_url: https://www.navsoft.in/career.html
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: SparkSupport
+  careers_url: https://www.sparksupport.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: TRooTech Business Solutions
+  careers_url: https://www.trootech.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: 7EDGE
+  careers_url: https://www.7edge.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Closeloop Technologies (India)
+  careers_url: https://www.closeloop.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: eSparkBiz
+  careers_url: https://www.esparkbiz.com/careers.html
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: AddWeb Solution
+  careers_url: https://www.addwebsolution.com/career
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Cynoteck Technology Solutions
+  careers_url: https://cynoteck.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: OrangeMantra
+  careers_url: https://www.orangemantra.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Fourtek IT Solutions
+  careers_url: https://fourtek.com/career/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Claritus Management Consulting
+  careers_url: https://www.claritusconsulting.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Neologix Software Solutions
+  careers_url: https://www.neologix.in/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Signity Solutions
+  careers_url: https://www.signitysolutions.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Saviant Consulting
+  careers_url: https://www.saviantconsulting.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Prolitus Technologies
+  careers_url: https://prolitus.com/career/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Cloud Analogy
+  careers_url: https://www.cloudanalogy.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Treselle Systems (India)
+  careers_url: https://www.treselle.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Surekha Technologies
+  careers_url: https://www.surekhatech.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Jobin & Jismi IT Services
+  careers_url: https://jobinandjismi.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: ABSYZ
+  careers_url: https://absyz.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Techstern Solutions
+  careers_url: https://techstern.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Rudder Analytics
+  careers_url: https://www.rudderanalytics.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Techmango Technology Services
+  careers_url: https://www.techmango.net/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Everdata Technologies
+  careers_url: https://www.everdata.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Softqube Technologies
+  careers_url: https://www.softqubes.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Pofco Solution Consultancy & Services
+  careers_url: https://pofcosolutions.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Veon Consulting
+  careers_url: https://www.veonconsulting.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Elegant MicroWeb
+  careers_url: https://www.elegantmicroweb.com/careers.htm
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Graffersid
+  careers_url: https://graffersid.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Horicent Systems
+  careers_url: https://www.horicent.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: BigStep Technologies
+  careers_url: https://www.bigsteptech.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: SerpentCS
+  careers_url: https://www.serpentcs.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Cartesian Consulting
+  careers_url: https://cartesianconsulting.com/career/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Soluzione IT Services
+  careers_url: https://www.soluzioneinc.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Direction Software Solutions
+  careers_url: https://www.direction.biz/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Astrea IT Services
+  careers_url: https://www.astreait.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Dexlock
+  careers_url: https://dexlock.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: MSPAssist
+  careers_url: https://www.mspassist.net/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: bluCursor Infotech
+  careers_url: https://www.blucursor.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Ideamine
+  careers_url: https://www.ideamine.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: eSage IT Services
+  careers_url: https://www.esageit.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Quixom Technology
+  careers_url: https://www.quixom.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: SD Squared (SD2 Labs)
+  careers_url: https://www.sdsquared.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Expertrec
+  careers_url: https://www.expertrec.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: GetOnCRM Solutions
+  careers_url: https://www.getoncrm.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Kcloud Technologies
+  careers_url: https://www.kcloudtechnologies.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: MKT Softwares
+  careers_url: https://www.mktsoftwares.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Cyntexa
+  careers_url: https://www.cyntexa.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Logikview Analytics
+  careers_url: https://logikview.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: GSV Systems
+  careers_url: https://gsvsystems.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: CloudLab.in
+  careers_url: https://cloudlab.in/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: KerdaSoftech
+  careers_url: https://kerdasoftech.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: XenonStack
+  careers_url: https://www.xenonstack.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Compufy Technolab
+  careers_url: https://www.compufytechnolab.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Geeks Solutions
+  careers_url: https://www.geekssolutions.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: CloudDrove
+  careers_url: https://clouddrove.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: 360 Degree Cloud
+  careers_url: https://www.360degreecloud.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: PointerArray
+  careers_url: https://pointerarray.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Scideas Solutions
+  careers_url: https://www.scideas.in/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: CCS Technologies
+  careers_url: https://www.ccs-technologies.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Your Server Doctor
+  careers_url: https://yourserverdoctor.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Cloudlogic Technologies
+  careers_url: https://cloudlogic.in/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Polestar Solutions & Services
+  careers_url: https://polestarllp.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Mindtree (pre-merger brand)
+  careers_url: https://www.mindtree.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Syntel (Atos Syntel India)
+  careers_url: https://atos.net/en/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Mahindra Satyam (legacy; now part of Tech Mahindra)
+  careers_url: https://careers.techmahindra.com/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: iGate (Capgemini acquisition)
+  careers_url: https://www.capgemini.com/in-en/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Qualcomm
+  careers_url: https://www.qualcomm.com/company/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: ServiceNow
+  careers_url: https://www.servicenow.com/company/careers.html
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: PayPal
+  careers_url: https://www.paypal.com/us/webapps/mpp/jobs
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Block (Square)
+  careers_url: https://block.xyz/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Plaid
+  careers_url: https://plaid.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Brex
+  careers_url: https://www.brex.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Chime
+  careers_url: https://www.chime.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Western Union
+  careers_url: https://westernunion.wd5.myworkdayjobs.com/WesternUnionJobs
+  scan_method: workday
+  notes: Workday tenant=westernunion site=WesternUnionJobs (from ATS detection CSV)
+  enabled: true
+- name: eBay
+  careers_url: https://careers.ebayinc.com/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Expedia Group
+  careers_url: https://lifeat.expediagroup.com/jobs/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Booking.com
+  careers_url: https://internal-workingatbooking.icims.com/
+  scan_method: playwright
+  notes: iCIMS board detected — Playwright / careers crawl (no public JSON watchlist yet)
+  enabled: true
+- name: DoorDash
+  careers_url: https://careers.doordash.com/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Instacart
+  careers_url: https://instacart.careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Zscaler
+  careers_url: https://www.zscaler.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Fortinet
+  careers_url: https://www.fortinet.com/corporate/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Rapid7
+  careers_url: https://www.rapid7.com/company/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: NortonLifeLock (Gen Digital)
+  careers_url: https://jobs.ashbyhq.com/gen-digital
+  notes: Ashby board from companies_ats_boards_detected.csv
+  enabled: true
+- name: Qualys
+  careers_url: https://www.qualys.com/company/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: SentinelOne
+  careers_url: https://www.sentinelone.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Proofpoint
+  careers_url: https://proofpoint.wd5.myworkdayjobs.com/proofpointcareers
+  scan_method: workday
+  notes: Workday tenant=proofpoint site=proofpointcareers (from ATS detection CSV)
+  enabled: true
+- name: DocuSign
+  careers_url: https://uscareers-docusign.icims.com/
+  scan_method: playwright
+  notes: iCIMS board detected — Playwright / careers crawl (no public JSON watchlist yet)
+  enabled: true
+- name: Monday.com
+  careers_url: https://monday.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: AMD
+  careers_url: https://careers-amd.icims.com/jobs/login
+  scan_method: playwright
+  notes: iCIMS board detected — Playwright / careers crawl (no public JSON watchlist yet)
+  enabled: true
+- name: Splunk
+  careers_url: https://www.splunk.com/en_us/careers.html
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: DataRobot
+  careers_url: https://www.datarobot.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: H2O.ai
+  careers_url: https://h2o.ai/company/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: C3.ai
+  careers_url: https://c3.ai/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Scale AI
+  careers_url: https://scale.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Cerebras Systems
+  careers_url: https://www.cerebras.net/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: DigitalOcean
+  careers_url: https://www.digitalocean.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: PagerDuty
+  careers_url: https://www.pagerduty.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Docker
+  careers_url: https://www.docker.com/company/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: JetBrains
+  careers_url: https://www.jetbrains.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Confluent
+  careers_url: https://www.confluent.io/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Veeva Systems
+  careers_url: https://www.veeva.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Illumina
+  careers_url: https://illumina.wd1.myworkdayjobs.com/illumina-careers
+  scan_method: workday
+  notes: Workday tenant=illumina site=illumina-careers (from ATS detection CSV)
+  enabled: true
+- name: Medtronic
+  careers_url: https://jobs.medtronic.com/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Thermo Fisher Scientific
+  careers_url: https://jobs.thermofisher.com/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: GE Healthcare
+  careers_url: https://jobs.gecareers.com/healthcare/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: 10x Genomics
+  careers_url: https://www.10xgenomics.com/company/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Benchling
+  careers_url: https://benchling.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Electronic Arts (EA)
+  careers_url: https://www.ea.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Riot Games
+  careers_url: https://www.riotgames.com/en/work-with-us
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Unity Technologies
+  careers_url: https://careers.unity.com/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Epic Games
+  careers_url: https://www.epicgames.com/site/en-US/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Activision Blizzard (Microsoft)
+  careers_url: https://careers.activisionblizzard.com/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Disney (including Disney+ Hotstar tech)
+  careers_url: https://jobs.disneycareers.com/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Notion
+  careers_url: https://jobs.ashbyhq.com/notion
+  notes: Ashby board from companies_ats_boards_detected.csv
+  enabled: true
+- name: Discord
+  careers_url: https://discord.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Reddit
+  careers_url: https://job-boards.greenhouse.io/reddit
+  api: https://boards-api.greenhouse.io/v1/boards/reddit/jobs
+  notes: Greenhouse board from companies_ats_boards_detected.csv
+  enabled: true
+- name: Grammarly
+  careers_url: https://www.grammarly.com/jobs
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Duolingo
+  careers_url: https://careers.duolingo.com/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Outreach
+  careers_url: https://www.outreach.io/company/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: BT Group (UK)
+  careers_url: https://jobs.bt.com/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Vodafone
+  careers_url: https://careers.vodafone.com/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Nokia
+  careers_url: https://www.nokia.com/about-us/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Ericsson
+  careers_url: https://www.ericsson.com/en/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: ARM (UK)
+  careers_url: https://earlycareers-arm.icims.com/jobs/login
+  scan_method: playwright
+  notes: iCIMS board detected — Playwright / careers crawl (no public JSON watchlist yet)
+  enabled: true
+- name: HSBC
+  careers_url: https://www.hsbc.com/careers
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Barclays
+  careers_url: https://home.barclays/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Standard Chartered
+  careers_url: https://www.sc.com/en/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: NatWest Group
+  careers_url: https://jobs.natwestgroup.com/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Revolut
+  careers_url: https://www.revolut.com/careers/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Wise (TransferWise)
+  careers_url: https://www.wise.jobs/
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: Shell
+  careers_url: https://www.shell.com/careers.html
+  scan_method: playwright
+  notes: Careers page from company list — Playwright mode (no public ATS board detected)
+  enabled: true
+- name: BP
+  careers_url: https://bpinternational.wd3.myworkdayjobs.com/bpCareers
+  scan_method: workday
+  notes: Workday tenant=bpinternational site=bpCareers (from ATS detection CSV)
+  enabled: true

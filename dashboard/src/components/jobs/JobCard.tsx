@@ -13,11 +13,14 @@ interface JobCardProps {
 }
 
 function displayScore(job: Job): string {
+  // Eval is already 0–5. Discovery fit_score is 0–100-ish; /10 was the
+  // historical mapping but title+skills+location can exceed 50, which made
+  // pending cards show impossible values like "6.0/5". Clamp the display.
   if (job.eval_score != null && job.eval_score > 0) {
-    return `${job.eval_score.toFixed(1)}/5`;
+    return `${Math.min(5, job.eval_score).toFixed(1)}/5`;
   }
   if (job.fit_score > 0) {
-    return `${(job.fit_score / 10).toFixed(1)}/5`;
+    return `${Math.min(5, job.fit_score / 10).toFixed(1)}/5`;
   }
   return "—";
 }

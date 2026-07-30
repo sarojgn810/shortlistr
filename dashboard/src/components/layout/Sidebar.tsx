@@ -6,9 +6,16 @@ import clsx from "clsx";
 import { ShoppingBag } from "lucide-react";
 import { NAV_GROUPS, NAV_SYSTEM, type NavItem } from "@/src/config/navigation";
 
+
+function isNavActive(pathname: string | null, item: NavItem): boolean {
+  if (!pathname) return false;
+  if (pathname === item.href) return true;
+  if (item.exact) return false;
+  return item.href !== "/" && pathname.startsWith(item.href + "/");
+}
+
 function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
-  const isActive =
-    pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
+  const isActive = isNavActive(pathname, item);
   return (
     <Link href={item.href}>
       <div
@@ -82,8 +89,7 @@ export default function Sidebar() {
           instead of being crushed once the nav grows past ~6 entries. */}
       <nav className="fixed bottom-0 left-0 z-50 flex w-full snap-x flex-row items-center gap-1 overflow-x-auto border-t border-mist/50 bg-white/90 px-2 py-3 backdrop-blur-md md:hidden">
         {[...NAV_GROUPS.flatMap((g) => g.items), ...NAV_SYSTEM].map((item) => {
-          const isActive =
-            pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
+          const isActive = isNavActive(pathname, item);
           return (
             <Link key={item.href} href={item.href} className="shrink-0 snap-start">
               <div

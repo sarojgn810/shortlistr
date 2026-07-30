@@ -88,10 +88,15 @@ export default function JobDetailModal({
   const explain = evalResult?.explain || asExplain(explainProp);
   const company = evalResult?.company || explain?.company || job?.company || "—";
   const role = evalResult?.role || explain?.role || job?.title || "—";
-  const score =
+  const rawScore =
     evalResult?.score ??
     explain?.eval_score ??
-    (job?.eval_score != null ? job.eval_score : job && job.fit_score > 0 ? job.fit_score / 10 : null);
+    (job?.eval_score != null
+      ? job.eval_score
+      : job && job.fit_score > 0
+        ? job.fit_score / 10
+        : null);
+  const score = rawScore != null ? Math.min(5, Number(rawScore)) : null;
   const legitimacy = evalResult?.legitimacy || explain?.legitimacy || job?.legitimacy;
   const blocks = evalResult?.blocks || job?.eval_blocks || {};
   const bullets = explain?.bullets || [];

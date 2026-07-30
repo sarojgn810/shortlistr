@@ -12,11 +12,13 @@ from sources.adapters.naukri_adapter import NaukriAdapter
 from sources.adapters.search_adapter import SearchDiscoveryAdapter
 from sources.adapters.url_resolver_adapter import UrlResolverAdapter
 from sources.adapters.watchlist_ats_adapter import WatchlistATSAdapter
+from sources.adapters.workday_adapter import WorkdayAdapter
 from sources.base import SourceAdapter
 from sources.circuit import is_open
 
 _ADAPTERS: dict[str, type[SourceAdapter]] = {
     "watchlist_ats": WatchlistATSAdapter,
+    "workday": WorkdayAdapter,
     "aggregators": AggregatorsAdapter,
     "search": SearchDiscoveryAdapter,
     "naukri": NaukriAdapter,
@@ -28,7 +30,7 @@ _ADAPTERS: dict[str, type[SourceAdapter]] = {
 
 # Legacy / optional sources (disabled by default)
 LEGACY_SOURCES = {
-    "workday", "smartrecruiters", "wellfound", "icims",
+    "smartrecruiters", "wellfound", "icims",
     "weworkremotely", "workingnomads", "nodesk", "jobspresso",
     "skipthedrive", "simplyhired", "monster", "glassdoor",
     "careerbuilder", "remoteco", "linkedin",
@@ -44,6 +46,10 @@ class SourceRegistry:
             and "linkedin_guest" not in self.enabled
         ):
             self.enabled.append("linkedin_guest")
+        # Workday boards are driven by portals.yml — enable whenever the adapter
+        # is registered and the profile didn't explicitly disable sources.
+        if enabled is None and "workday" not in self.enabled:
+            self.enabled.append("workday")
 
     def adapters(self) -> list[SourceAdapter]:
         out: list[SourceAdapter] = []

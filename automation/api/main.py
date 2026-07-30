@@ -1430,6 +1430,10 @@ def create_app():
             ).fetchall()
         return [dict(r) for r in rows]
 
+    from api.linkedin_optimizer import register_linkedin_optimizer_routes
+
+    register_linkedin_optimizer_routes(app, auth_dep=Depends(_auth))
+
     return app
 
 

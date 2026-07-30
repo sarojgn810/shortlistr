@@ -9,6 +9,7 @@ import {
   UserCircle,
   Plug,
   Settings,
+  Linkedin,
   type LucideIcon,
 } from "lucide-react";
 
@@ -16,6 +17,8 @@ export interface NavItem {
   icon: LucideIcon;
   label: string;
   href: string;
+  /** When true, only exact path matches (children have their own nav entries). */
+  exact?: boolean;
 }
 
 export interface NavGroup {
@@ -41,8 +44,9 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Assets",
     items: [
-      { icon: FileText,   label: "Resume",  href: "/cv" },
-      { icon: UserCircle, label: "Profile", href: "/profile" },
+      { icon: FileText,   label: "Resume",   href: "/cv" },
+      { icon: Linkedin,   label: "LinkedIn", href: "/linkedin" },
+      { icon: UserCircle, label: "Profile",  href: "/profile" },
     ],
   },
 ];
@@ -51,3 +55,17 @@ export const NAV_SYSTEM: NavItem[] = [
   { icon: Plug,     label: "Connections", href: "/connections" },
   { icon: Settings, label: "Settings",    href: "/settings" },
 ];
+
+export const LINKEDIN_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "headline", label: "Headline" },
+  { id: "about", label: "About" },
+  { id: "experience", label: "Experience" },
+  { id: "keywords", label: "Keywords" },
+  { id: "visibility", label: "Visibility" },
+  { id: "cover", label: "Cover" },
+  { id: "preview", label: "Preview" },
+  { id: "export", label: "Export" },
+] as const;
+
+export type LinkedInTabId = (typeof LINKEDIN_TABS)[number]["id"];

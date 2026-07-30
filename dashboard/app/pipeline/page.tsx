@@ -96,7 +96,10 @@ export default function PipelinePage() {
     setDiscovering(true);
     try {
       await api.discover(false);
-      toast.success("Discovery complete");
+      toast.success(
+        "Scan running — matching jobs land on Discover as sources finish. Keep the app open.",
+        { duration: 7000 },
+      );
       refetch(true);
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "Discovery failed — is the API running?");

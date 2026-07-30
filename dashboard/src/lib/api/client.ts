@@ -221,6 +221,106 @@ export interface PrepSummary {
 
 export type PageTarget = "auto" | "1" | "2";
 
+export interface LinkedInExperienceJob {
+  title: string;
+  company: string;
+  bullets: string[];
+}
+
+export interface LinkedInProfile {
+  raw?: string;
+  name: string;
+  headline: string;
+  about: string;
+  experience: LinkedInExperienceJob[];
+  skills: string[];
+  featured: string;
+  open_to_work: string;
+  location: string;
+  contact: string;
+  linkedin_url?: string;
+  source?: string;
+}
+
+export interface LinkedInScore {
+  role_id: string;
+  role_label: string;
+  overall: number;
+  dimensions: {
+    keyword_match: number;
+    role_alignment: number;
+    quantification: number;
+    clarity: number;
+    impact: number;
+    completeness: number;
+    consistency: number;
+  };
+  weak_areas: string[];
+  found_keywords: string[];
+  missing_keywords: string[];
+  missing_nice_keywords: string[];
+  likely_recruiter_searches: string[];
+  title_hits: string[];
+  checklist: { id: string; label: string; detail: string; severity: string }[];
+  section_presence: Record<string, boolean>;
+  mode: string;
+}
+
+export interface LinkedInRoleOption {
+  id: string;
+  label: string;
+  search_titles: string[];
+}
+
+export interface LinkedInCoverTheme {
+  id: string;
+  label: string;
+  description: string;
+  preview_colors: { bg: string; accent: string; text: string };
+}
+
+export interface LinkedInOptimizerState {
+  profile: LinkedInProfile;
+  target_role: string;
+  score: LinkedInScore;
+  roles: LinkedInRoleOption[];
+  cover_themes: LinkedInCoverTheme[];
+  linkedin_url?: string;
+  source?: string;
+  substantial?: boolean;
+  needs_import?: boolean;
+  import_note?: string | null;
+}
+
+export interface LinkedInRewriteResult {
+  section: string;
+  original: string;
+  suggested: string;
+  rationale: string;
+  mode: string;
+  llm_attempted?: boolean;
+  suggested_list?: string[];
+  suggested_structured?: LinkedInExperienceJob[];
+  recommended_keywords?: string[];
+  notes?: string[];
+  error?: string;
+}
+
+export interface LinkedInImportResult {
+  ok: boolean;
+  profile?: LinkedInProfile | null;
+  score?: LinkedInScore;
+  target_role?: string;
+  linkedin_url?: string;
+  source?: string;
+  error?: string;
+  needs_url?: boolean;
+  cv_fallback_available?: boolean;
+  import_note?: string;
+  partial?: boolean;
+  hint?: string;
+}
+
 export interface CvArtifacts {
   cv_path: string | null;
   template_id: string | null;
@@ -624,6 +724,80 @@ export const api = {
       pipeline_targeted?: Record<string, number>;
       applications: Record<string, number>;
     }>("/pipeline/stats"),
+  linkedInState: () => request<LinkedInOptimizerState>("/linkedin/optimizer/state"),
+  linkedInAnalyze: (body: {
+    text?: string;
+    profile?: Partial<LinkedInProfile>;
+    target_role?: string;
+    linkedin_url?: string;
+  }) =>
+    request<{
+      profile: LinkedInProfile;
+      score: LinkedInScore;
+      target_role: string;
+      role: LinkedInRoleOption;
+      beats: string[];
+      linkedin_url?: string;
+      source?: string;
+      substantial?: boolean;
+    }>("/linkedin/optimizer/analyze", { method: "POST", body: JSON.stringify(body) }),
+  linkedInImportCv: (target_role?: string) =>
+    request<LinkedInImportResult>("/linkedin/optimizer/import-cv", {
+      method: "POST",
+      body: JSON.stringify({ target_role: target_role ?? null }),
+    }),
+  linkedInImportUrl: (url?: string, target_role?: string) =>
+    request<LinkedInImportResult>("/linkedin/optimizer/import-url", {
+      method: "POST",
+      body: JSON.stringify({ url: url || null, target_role: target_role || "sre" }),
+    }),
+  linkedInSave: (profile: LinkedInProfile, target_role: string) =>
+    request<{
+      profile: LinkedInProfile;
+      score: LinkedInScore;
+      target_role: string;
+    }>("/linkedin/optimizer/save", {
+      method: "POST",
+      body: JSON.stringify({ profile, target_role }),
+    }),
+  linkedInRewrite: (body: {
+    section: string;
+    profile?: LinkedInProfile;
+    target_role?: string;
+    use_llm?: boolean;
+  }) =>
+    request<LinkedInRewriteResult>("/linkedin/optimizer/rewrite", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  linkedInRewriteAll: (body: {
+    profile?: LinkedInProfile;
+    target_role?: string;
+    use_llm?: boolean;
+  }) =>
+    request<{ sections: Record<string, LinkedInRewriteResult>; target_role: string }>(
+      "/linkedin/optimizer/rewrite-all",
+      { method: "POST", body: JSON.stringify(body) }
+    ),
+  linkedInCoverThemes: () =>
+    request<{ themes: LinkedInCoverTheme[] }>("/linkedin/optimizer/cover/themes"),
+  linkedInCoverRender: (body: {
+    theme_id: string;
+    name?: string;
+    headline?: string;
+    subline?: string;
+  }) =>
+    request<{
+      theme_id: string;
+      width: number;
+      height: number;
+      svg: string;
+      mime: string;
+      hint: string;
+    }>("/linkedin/optimizer/cover/render", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };
 
 export { ApiError };

@@ -13,8 +13,12 @@ interface JobRowProps {
 }
 
 function scoreLabel(job: Job): string {
-  if (job.eval_score != null && job.eval_score > 0) return job.eval_score.toFixed(1);
-  if (job.fit_score > 0) return (job.fit_score / 10).toFixed(1);
+  if (job.eval_score != null && job.eval_score > 0) {
+    return Math.min(5, job.eval_score).toFixed(1);
+  }
+  if (job.fit_score > 0) {
+    return Math.min(5, job.fit_score / 10).toFixed(1);
+  }
   return "—";
 }
 

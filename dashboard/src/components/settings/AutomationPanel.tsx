@@ -61,7 +61,10 @@ export default function AutomationPanel() {
     setScanning(true);
     try {
       await api.runScheduledScan(false, true);
-      toast.success("Scan started — new jobs will appear on Discover");
+      toast.success(
+        "Scan running — keep the app open. Matching jobs land on Discover as sources finish (often a few minutes).",
+        { duration: 8000 },
+      );
       await load();
     } catch {
       toast.error("Couldn’t start a scan");

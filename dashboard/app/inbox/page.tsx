@@ -251,7 +251,10 @@ export default function InboxPage() {
             try {
               const res = await discover(false);
               if (res && "enqueued" in res) {
-                toast.success("Scan started — jobs will appear as sources finish");
+                toast.success(
+                  "Scan running in the background — keep this tab open. Matching jobs land as each source finishes (often a few minutes).",
+                  { duration: 8000 },
+                );
               } else if (res && typeof res.relevant === "number") {
                 const kept = res.kept ?? res.relevant;
                 const dropped =
@@ -278,18 +281,22 @@ export default function InboxPage() {
             }
           }}
           isLoading={isDiscovering}
-          title="Crawl configured job boards for new postings — runs in the background, results appear as each source finishes"
+          title="Crawl configured boards in the background. ATS feeds arrive first; slower careers pages keep adding matches — leave the tab open and check back."
         >
           <Radar size={18} />
-          {isDiscovering ? "Scanning in background…" : "Scan job boards"}
+          {isDiscovering ? "Scanning… keep this tab open" : "Scan job boards"}
         </Button>
         <Button variant="ghost" onClick={() => refetch(true)} title="Reload the job list from the database">
           <RefreshCw size={16} />
         </Button>
         {isDiscovering && (
-          <span className="flex items-center gap-2 rounded-xl bg-sage/40 px-3.5 py-2 text-sm font-bold text-stone">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-lime" />
-            Sources are still reporting — new roles appear here automatically
+          <span className="flex max-w-xl items-start gap-2 rounded-xl bg-sage/40 px-3.5 py-2 text-sm font-medium text-stone">
+            <span className="mt-1.5 h-2 w-2 shrink-0 animate-pulse rounded-full bg-lime" />
+            <span>
+              Fast ATS boards (Greenhouse, Lever, Ashby, Workday) fill first. More
+              matching roles can still land over the next few minutes — leave this
+              page open; you don’t need to click Scan again.
+            </span>
           </span>
         )}
         {newJobCount > 0 && (

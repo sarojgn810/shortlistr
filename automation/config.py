@@ -467,6 +467,7 @@ DISCOVERY_RESOLVE_PIPELINE = str(_discovery.get("resolve_pipeline_urls", "true")
 _sources = _PROFILE.get("sources") if isinstance(_PROFILE.get("sources"), dict) else {}
 _default_enabled = [
     "watchlist_ats",
+    "workday",
     "linkedin_guest",
     "aggregators",
     "naukri",

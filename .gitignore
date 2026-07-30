@@ -4,6 +4,7 @@ config/profile.yml
 portals.yml
 modes/_profile.md
 article-digest.md
+companies_ats_boards_detected.csv
 data/applications.md
 data/*.bak
 data/*.db.bak-*

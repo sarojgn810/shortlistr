@@ -14,7 +14,20 @@ Template:
 
 ---
 
-## 2026-07-30 — Discover scanned thousands of jobs but almost none were good
+## 2026-07-30 — Job cards showed 6.0/5 and blamed a missing résumé
+**Symptom:** Discover cards showed impossible scores like `6.0/5`, repeated
+`title match; title match (no résumé skills to compare)` even with a full
+`cv.md`, and LinkedIn guest rows with empty JDs outscored enriched ones.
+**Root cause:** (1) UI mapped `fit_score/10` onto a /5 badge without clamping,
+while fit can reach 60–90. (2) Scorer took the empty-JD branch whenever
+`skills and jd` was falsy, and that branch re-appended "title match" while
+blaming the résumé. (3) `skill_signals()` split category blobs
+(`SRE & Reliability SLO…`) so almost nothing substring-matched a real JD.
+**Fix:** Clamp card/row/modal display at 5.0; honest reasons
+(`JD not fetched yet` / `résumé skills not parsed yet`); mine atomic tech
+tokens from the résumé for overlap; clamp stored fit at 100.
+**Guard:** `tests/test_job_card_scoring.py`.
+
 **Symptom:** Recent runs discovered ~3,900 jobs and passed ~29; Settings showed
 thousands saved while on-target yield stayed near zero. Live audit:
 watchlist_ats 3505→15 (0.4%), aggregators 131→5, Naukri/search/Ashby 0.
