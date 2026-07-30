@@ -135,6 +135,54 @@ def get_ashby_slugs() -> list[str]:
     return sorted(ashby)
 
 
+def get_websearch_company_queries(
+    portals_path: str | None = None,
+    *,
+    limit: int = 8,
+) -> tuple[list[dict], dict]:
+    """Load tracked_companies that rely on scan_method: websearch.
+
+    These rows were never read by discovery — watchlist_ats only extracts
+    Greenhouse/Lever/Ashby slugs — so branded careers pages sat as dead config.
+    """
+    path = portals_path or _resolve_portals_path()
+    stats = {"companies": 0, "with_query": 0, "skipped_no_query": 0, "capped": 0}
+    if not path:
+        return [], stats
+
+    try:
+        import yaml
+
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except Exception:
+        return [], stats
+
+    queries: list[dict] = []
+    for company in data.get("tracked_companies") or []:
+        if not isinstance(company, dict) or company.get("enabled") is False:
+            continue
+        method = str(company.get("scan_method") or "").strip().lower()
+        if method != "websearch":
+            continue
+        stats["companies"] += 1
+        query = str(company.get("scan_query") or "").strip()
+        name = str(company.get("name") or "").strip() or "company"
+        if not query:
+            stats["skipped_no_query"] += 1
+            continue
+        stats["with_query"] += 1
+        if len(queries) >= max(0, limit):
+            stats["capped"] += 1
+            continue
+        queries.append({
+            "query": query,
+            "name": f"company:{name}",
+            "company": name,
+        })
+    return queries, stats
+
+
 def portals_summary() -> str:
     path = _resolve_portals_path()
     gh, lever, ashby = load_portals_slugs()

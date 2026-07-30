@@ -68,12 +68,12 @@ export default function Sidebar() {
             ))}
           </div>
           <a
-            href="https://shortlistr.xyz"
+            href="https://www.sarojnayak.com"
             target="_blank"
             rel="noopener noreferrer"
             className="mt-3 block px-3 text-[11px] text-stone/40 transition-colors hover:text-stone"
           >
-            shortlistr.xyz
+            sarojnayak.com
           </a>
         </div>
       </aside>

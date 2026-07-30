@@ -121,6 +121,12 @@ def _run_duckduckgo(query: str, num: int = 10) -> list[dict]:
         headers={**HEADERS, "Content-Type": "application/x-www-form-urlencoded"},
         timeout=FETCH_TIMEOUT,
     )
+    if resp.status_code == 202 or (
+        "anomaly" in resp.text.lower() and 'class="result__a"' not in resp.text
+    ):
+        raise RuntimeError(
+            f"DuckDuckGo challenged automated search (HTTP {resp.status_code})"
+        )
     resp.raise_for_status()
     html = resp.text
     results: list[dict] = []
@@ -204,7 +210,10 @@ def load_search_queries(portals_path: str | None = None) -> list[dict]:
         q for q in (config.get("search_queries") or [])
         if isinstance(q, dict) and q.get("enabled", True) is not False and q.get("query")
     ]
-    return manual + _auto_location_queries()
+    from portals_config import get_websearch_company_queries
+
+    company_queries, _ = get_websearch_company_queries(path, limit=8)
+    return manual + company_queries + _auto_location_queries()
 
 
 def discover_from_search(
@@ -220,7 +229,11 @@ def discover_from_search(
 
     Each offer: {title, url, company, location, source}
     """
+    from portals_config import get_websearch_company_queries
+
+    path = portals_path or PORTALS_PATH
     queries = load_search_queries(portals_path)
+    _, websearch_stats = get_websearch_company_queries(path, limit=8)
     stats = {
         "queries_run": 0,
         "results_raw": 0,
@@ -229,6 +242,10 @@ def discover_from_search(
         "liveness_expired": 0,
         "title_filtered": 0,
         "backend": backend or search_backend_available() or "duckduckgo",
+        "error": "",
+        "websearch_companies": websearch_stats.get("companies", 0),
+        "websearch_skipped_no_query": websearch_stats.get("skipped_no_query", 0),
+        "websearch_capped": websearch_stats.get("capped", 0),
     }
     if not queries:
         return [], stats
@@ -255,6 +272,7 @@ def discover_from_search(
             consecutive_failures = 0
         except Exception as e:
             logger.warning(f"Search query '{name}' failed: {e}")
+            stats["error"] = str(e)
             consecutive_failures += 1
             continue
 

@@ -242,10 +242,9 @@ tracked_companies:
     enabled: true
 
   - name: Twilio
-    careers_url: https://www.twilio.com/en-us/company/jobs
-    scan_method: websearch
-    scan_query: 'site:twilio.com/company/jobs "AI" OR "Voice" "Solutions" OR "Architect"'
-    notes: "Voice/messaging infrastructure."
+    careers_url: https://job-boards.greenhouse.io/twilio
+    api: https://boards-api.greenhouse.io/v1/boards/twilio/jobs
+    notes: "Voice/messaging. ~25 India/Remote-India roles on Greenhouse."
     enabled: true
 
   - name: Dialpad
@@ -747,6 +746,47 @@ tracked_companies:
     notes: "India fintech."
     enabled: true
 
+  - name: HackerRank
+    careers_url: https://job-boards.greenhouse.io/hackerrank
+    api: https://boards-api.greenhouse.io/v1/boards/hackerrank/jobs
+    notes: "Developer platform. Majority of board is Bangalore/Hybrid India."
+    enabled: true
+
+  - name: Thoughtworks
+    careers_url: https://job-boards.greenhouse.io/thoughtworks
+    api: https://boards-api.greenhouse.io/v1/boards/thoughtworks/jobs
+    notes: "Global consultancy with India delivery centers."
+    enabled: true
+
+  - name: Navi
+    careers_url: https://jobs.ashbyhq.com/navi
+    notes: "India fintech (Navi Technologies). Ashby board."
+    enabled: true
+
+  - name: Elastic
+    careers_url: https://job-boards.greenhouse.io/elastic
+    api: https://boards-api.greenhouse.io/v1/boards/elastic/jobs
+    notes: "Observability/search. Bangalore + Mumbai openings."
+    enabled: true
+
+  - name: MongoDB
+    careers_url: https://job-boards.greenhouse.io/mongodb
+    api: https://boards-api.greenhouse.io/v1/boards/mongodb/jobs
+    notes: "Database platform. Bengaluru / Gurugram / Mumbai openings."
+    enabled: true
+
+  - name: Databricks
+    careers_url: https://job-boards.greenhouse.io/databricks
+    api: https://boards-api.greenhouse.io/v1/boards/databricks/jobs
+    notes: "Data platform. Dozens of Bengaluru / Remote-India roles."
+    enabled: true
+
+  - name: Stripe
+    careers_url: https://job-boards.greenhouse.io/stripe
+    api: https://boards-api.greenhouse.io/v1/boards/stripe/jobs
+    notes: "Payments. Bengaluru engineering openings."
+    enabled: true
+
   # -- Careers pages without a public GH/Lever/Ashby board (watchlist skips them;
   #    Naukri/Apify/search still surface their openings) --
 
@@ -830,9 +870,8 @@ tracked_companies:
     enabled: true
 
   - name: Meesho
-    careers_url: https://careers.meesho.com
-    scan_method: websearch
-    scan_query: 'site:careers.meesho.com "Site Reliability" OR SRE OR "Platform Engineer"'
+    careers_url: https://jobs.lever.co/meesho
+    notes: "India commerce. Public Lever board (Bangalore-heavy)."
     enabled: true
 
   - name: Zerodha

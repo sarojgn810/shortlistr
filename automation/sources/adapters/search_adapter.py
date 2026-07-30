@@ -34,6 +34,7 @@ class SearchDiscoveryAdapter(SourceAdapter):
             check_liveness=True,
         )
         stats.raw_count = search_stats.get("ats_urls", 0)
+        stats.error = str(search_stats.get("error") or "")
         for o in offers:
             jobs.append(
                 JobRecord(

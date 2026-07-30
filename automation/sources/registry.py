@@ -7,6 +7,7 @@ from config import SOURCE_ENABLED, LINKEDIN_SOURCE_CONFIG, DISCOVERY_RESOLVE_PIP
 from sources.adapters.aggregators_adapter import AggregatorsAdapter
 from sources.adapters.apify_adapter import ApifyAdapter
 from sources.adapters.gmail_adapter import GmailAdapter
+from sources.adapters.linkedin_guest_adapter import LinkedInGuestAdapter
 from sources.adapters.naukri_adapter import NaukriAdapter
 from sources.adapters.search_adapter import SearchDiscoveryAdapter
 from sources.adapters.url_resolver_adapter import UrlResolverAdapter
@@ -22,6 +23,7 @@ _ADAPTERS: dict[str, type[SourceAdapter]] = {
     "apify": ApifyAdapter,
     "url_resolver": UrlResolverAdapter,
     "gmail": GmailAdapter,
+    "linkedin_guest": LinkedInGuestAdapter,
 }
 
 # Legacy / optional sources (disabled by default)
@@ -35,7 +37,13 @@ LEGACY_SOURCES = {
 
 class SourceRegistry:
     def __init__(self, enabled: list[str] | None = None):
-        self.enabled = enabled if enabled is not None else SOURCE_ENABLED
+        self.enabled = list(enabled if enabled is not None else SOURCE_ENABLED)
+        if (
+            enabled is None
+            and LINKEDIN_SOURCE_CONFIG.get("enabled", True)
+            and "linkedin_guest" not in self.enabled
+        ):
+            self.enabled.append("linkedin_guest")
 
     def adapters(self) -> list[SourceAdapter]:
         out: list[SourceAdapter] = []

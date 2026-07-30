@@ -803,25 +803,28 @@ def create_app():
         run_id = store.start_run(dry_run=req.dry_run)
         passed, rejected, stats = discover_and_filter(log_totals=True)
         if not req.dry_run:
-            # Persist relevant matches AND off-target finds (tagged); the inbox
-            # shows relevant by default and reveals the rest via "All".
-            persist_discovered(passed + rejected, run_id)
+            # User DB only gets profile keepers (relevant + fit floor).
+            persist_discovered(passed, run_id)
             from scheduler.scan_scheduler import record_scan_result
 
             record_scan_result(stats, added=len(passed))
+        gate = stats.get("persist_gate") or {}
         store.finish_run(
             run_id,
             source_stats=stats,
-            discovered=len(passed) + len(rejected),
+            discovered=int(gate.get("fetched") or (len(passed) + len(rejected))),
             passed=len(passed),
             strong_fit=0,
         )
         store.audit("api_discover", "run", run_id, {"user": user.get("sub")})
         return {
             "run_id": run_id,
-            "discovered": len(passed) + len(rejected),
+            "discovered": int(gate.get("fetched") or (len(passed) + len(rejected))),
             "relevant": len(passed),
             "off_target": len(rejected),
+            "kept": int(gate.get("kept") or len(passed)),
+            "dropped_off_target": int(gate.get("dropped_off_target") or 0),
+            "dropped_low_fit": int(gate.get("dropped_low_fit") or 0),
             "stats": stats,
         }
 

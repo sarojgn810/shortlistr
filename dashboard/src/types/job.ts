@@ -135,6 +135,9 @@ export interface DiscoverResult {
   discovered?: number;
   relevant?: number;
   off_target?: number;
+  kept?: number;
+  dropped_off_target?: number;
+  dropped_low_fit?: number;
   stats?: Record<string, unknown>;
   enqueued?: number;
   dry_run?: boolean;

@@ -19,7 +19,7 @@ import { api, ApiError, type AtsScore, type AutomationSettings, type CvTemplate,
 import { ArrowRight, CheckCircle2, FileText } from "lucide-react";
 
 const STEPS = ["Welcome", "Profile", "Resume", "Template", "Review", "Done"] as const;
-const WELCOME_SEEN_KEY = "shortlistr_onboarding_welcome_seen";
+const WELCOME_SEEN_KEY = "autojob_onboarding_welcome_seen";
 
 export default function OnboardingPage() {
   const router = useRouter();

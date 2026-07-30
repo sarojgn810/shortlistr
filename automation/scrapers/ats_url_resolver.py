@@ -264,7 +264,7 @@ def can_resolve_job_url(url: str) -> bool:
 
 
 def _resolve_careers_html(url: str) -> dict | None:
-    """Scrape title from company careers pages (Datadog, Kentik, etc.)."""
+    """Scrape title + JD from company careers pages (Datadog, Kentik, etc.)."""
     parsed = urlparse(url.strip())
     host = parsed.netloc.lower()
     spec = _KNOWN_CAREERS_HOSTS.get(host)
@@ -272,10 +272,15 @@ def _resolve_careers_html(url: str) -> dict | None:
         return None
     company_label, title_pat = spec
     try:
-        resp = requests.get(url.strip(), headers=HEADERS, timeout=FETCH_TIMEOUT)
-        if resp.status_code != 200:
+        from scrapers.browser_fetch import fetch_page
+        from scrapers.html_text import html_to_markdown, html_to_plain
+
+        page = fetch_page(url.strip(), allow_browser=False)
+        if page.status != 200 or not page.html:
             return None
-        html = resp.text
+        html = page.html
+        md = html_to_markdown(html, max_len=12000)
+        jd = html_to_plain(md, max_len=4000)
     except Exception as e:
         logger.debug(f"Careers HTML resolve {url}: {e}")
         return None
@@ -297,9 +302,9 @@ def _resolve_careers_html(url: str) -> dict | None:
         company=company_label,
         title=title,
         location="Remote",
-        url=resp.url or url,
+        url=page.final_url or url,
         job_id=parsed.path.rstrip("/").split("/")[-1] or "0",
-        jd_snippet="",
+        jd_snippet=jd[:800],
     )
 
 

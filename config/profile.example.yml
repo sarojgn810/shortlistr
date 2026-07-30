@@ -121,13 +121,15 @@ discovery:
   resolve_pipeline_urls: true           # fetch ATS jobs from pending pipeline URLs
 
 # ── Source registry (Phase 1 architecture) ────────────────────────────────────
-# Default enabled: watchlist ATS + aggregators + naukri + search + url_resolver
-# LinkedIn browser scrape is opt-in. Apify (LinkedIn + Naukri cloud actors) is
-# also opt-in — add "apify" to enabled and set APIFY_TOKEN in .env (free $5 credit
+# Default enabled: public LinkedIn search + watchlist ATS + aggregators + Naukri
+# + web search + URL resolver. LinkedIn uses signed-out public listing cards:
+# no login, cookies, or application actions. Apify is also opt-in — add "apify"
+# to enabled and set APIFY_TOKEN in .env (free $5 credit
 # is enough for personal searches; ~$0.20 covered 130 roles in inventory).
 sources:
   enabled:
     - watchlist_ats
+    - linkedin_guest
     - aggregators
     - naukri
     - search
@@ -135,7 +137,7 @@ sources:
     - gmail
     # - apify                 # uncomment + set APIFY_TOKEN to enable
   linkedin:
-    enabled: false                      # opt-in — set true to enable LinkedIn scraping
+    enabled: true                       # public signed-out listing search; no login
     mode: scrape_only                   # scrape only — auto-submit was removed
     easy_apply: false                   # ignored; never clicks Submit
   apify:

@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 _REMOTE_TERMS = {"remote", "anywhere", "worldwide", "global", "work from home", "wfh"}
 
 
+class NaukriBlockedError(RuntimeError):
+    """Naukri challenged the anonymous public search request."""
+
+
 def _build_search_pairs() -> list[tuple[str, str]]:
     """Build (title, location) pairs from profile config."""
     import config as _cfg
@@ -153,8 +157,12 @@ def scrape_naukri() -> list:
                 headers=HEADERS,
                 timeout=15,
             )
+            if resp.status_code == 406:
+                raise NaukriBlockedError(
+                    "Naukri public search requires CAPTCHA (HTTP 406)"
+                )
             if resp.status_code != 200:
-                logger.debug(f"Naukri API {resp.status_code} for '{keyword}'")
+                logger.warning("Naukri API HTTP %s for '%s'", resp.status_code, keyword)
                 continue
 
             data     = resp.json()
@@ -174,6 +182,8 @@ def scrape_naukri() -> list:
 
             logger.info(f"Naukri '{keyword}': {len(listings)} results")
 
+        except NaukriBlockedError:
+            raise
         except Exception as e:
             logger.warning(f"Naukri scrape error for '{keyword}': {e}")
 

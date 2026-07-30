@@ -19,7 +19,7 @@ MIGRATIONS_DIR = os.path.join(os.path.dirname(__file__), "migrations")
 
 # ── two databases, one schema ────────────────────────────────────────────────
 #
-# The default database (data/shortlistr.db) is the owner's own job search: their
+# The PERSONAL database (data/shortlistr.db) is the owner's own job search: their
 # discovery inbox, evaluations, applications. Anyone who clones the repo gets
 # only this one.
 #
@@ -32,7 +32,7 @@ MIGRATIONS_DIR = os.path.join(os.path.dirname(__file__), "migrations")
 # thing on either side and there is no second schema to maintain.
 
 _active_db: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "shortlistr_active_db", default=None
+    "autojob_active_db", default=None
 )
 
 

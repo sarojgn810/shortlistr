@@ -13,6 +13,77 @@ Template:
 
 ---
 
+---
+
+## 2026-07-30 — User DB is profile-scoped (persist gate + retarget purge)
+**Decision:** Discovery only upserts jobs that pass title/location *and* the
+fit floor (`jobs_for_user_db`). Off-target and low-fit rows never inflate the
+user DB. On profile targeting change, `retag_existing_jobs` re-scores keepers
+and **purges** mismatches, except pipeline `approved`/`submitted` and
+application `applied`/`responded`/`interview`/`offer`/`rejected` (those are
+re-tagged `off_target` but kept). Scan stats expose `persist_gate`
+(fetched/kept/dropped_*).
+**Why:** Warehousing every board hit then UI-filtering made Discover look empty
+while Settings reported thousands of saved jobs. The product promise is
+relevant matches, not a scrapyard.
+**Touches:** `orchestrator/discovery.py`, `jobs/ingest.py`,
+`scheduler/scan_scheduler.py`, `api/main.py` `/jobs/discover`,
+`tests/test_persist_gate.py`, `tests/test_retag_targeting.py`.
+
+## 2026-07-30 — Steal page compression, not a scraper framework
+**Decision:** Do not depend on or name third-party “LLM scrape graph” libraries.
+Steal only: (1) HTML→markdown compression that mines `__NEXT_DATA__` / inline
+JSON before stripping scripts, (2) requests-first page fetch with Playwright
+fallback for empty SPA shells. Wire dead `scan_method: websearch` portal rows
+into `load_search_queries` (capped). Post-persist JD enrich fills thin
+LinkedIn/search rows. No free proxies, CAPTCHA bypass, or auto-submit.
+**Why:** Discovery yield is already limited by silent zeros and empty JDs, not
+by missing anti-bot infra. Compression improves local-LLM/eval token cost and
+fit scoring; websearch portal wiring unlocks config that was never read.
+**Touches:** `portals_config.get_websearch_company_queries`,
+`processors/search_discovery.py`, `scrapers/html_text.py`,
+`scrapers/browser_fetch.py`, `processors/enrich_jd.py`,
+`ats_url_resolver._resolve_careers_html`, tests.
+
+## 2026-07-30 — Free LinkedIn guest search is a first-class source
+**Decision:** Discovery includes a `linkedin_guest` adapter that hits LinkedIn's
+signed-out public listings endpoint (`jobs-guest/.../search`). It needs no login,
+cookies, or Easy Apply; it never submits. Query pairs come from
+`search_titles()` × (`search_locations()` + remote-in-country when the profile
+wants remote). Requests are paced and 429s are retried once, then surfaced as a
+source error. Apify LinkedIn remains optional paid coverage.
+**Why:** Local scrapers were company-list crawlers (Greenhouse/Lever) or blocked
+(Naukri CAPTCHA, DuckDuckGo 202). Nothing free did keyword+location search for
+India. Live probe: ~141 unique guest cards → ~47 on-target (33% hit) vs
+watchlist_ats 0.4%.
+**Touches:** `scrapers/linkedin_guest.py`, `sources/adapters/linkedin_guest_adapter.py`,
+`sources/registry.py`, `config.py`, `profile.example.yml`,
+`tests/test_linkedin_guest.py`.
+
+## 2026-07-30 — Source `FetchStats.error` is a failure, not a silent zero
+**Decision:** When an adapter returns with `stats.error` set, discovery calls
+`record_failure` and logs a warning even if the call itself did not raise.
+Naukri CAPTCHA (HTTP 406), DuckDuckGo anomaly/202, Ashby GraphQL schema errors,
+and LinkedIn guest 429 after retry all set that field. A source that returns
+`raw=0` with no error is still allowed (empty board / no matches).
+**Why:** Three sources were returning zero forever while looking healthy —
+Ashby returned GraphQL errors under HTTP 200; Naukri 406 and DDG 202 never raised.
+**Touches:** `orchestrator/discovery.py`, `scrapers/ashby_scraper.py`,
+`scrapers/naukri_scraper.py`, `processors/search_discovery.py`,
+`tests/test_source_failures.py`.
+
+## 2026-07-30 — India ATS watchlist prefers verified public boards
+**Decision:** Expand `portals.yml` / `portals.example.yml` only with boards that
+responded live today (Greenhouse/Lever/Ashby). Prefer India-heavy employers
+(HackerRank, Thoughtworks, Navi, Meesho Lever, PhonePe/Razorpay/…) and platforms
+with real Bangalore/Remote-India openings (Elastic, MongoDB, Databricks, Stripe,
+Twilio). Upgrade websearch-only entries to their public API when found. Do not
+add boards with zero India locations just because the API is up.
+**Why:** Watchlist volume without India relevance recreates the 0.4% hit-rate
+problem. LinkedIn guest covers keyword search; ATS watchlist should cover
+employers that actually hire here.
+**Touches:** `portals.yml`, `templates/portals.example.yml`.
+
 ## 2026-07-30 — Apify belongs in Connections / first-run setup
 **Decision:** Apify is no longer docs-only. Connections has a “More job boards”
 card (token + enable toggle + $5 free-credit guide). Welcome/setup checklist
@@ -564,10 +635,12 @@ Tests: `tests/test_data_boundary.py` (16).
 `Makefile`, `scripts/migrate-platform-data.py` (new).
 
 ## 2026-07-25 — Repo split: the platform moved to a private repo
+**Decision:** Layer 3 now lives in `~/Documents/referral-engine` (private). This
 repo is the engine plus the single-user tool: anyone who clones it gets a complete
 personal job search and nothing else — no /engage routes, no testbed, no referral
 or moderation commands, and no tables holding other people's data.
 **Dependency direction:** the platform imports this repo rather than vendoring it.
+`referral-engine/bootstrap.py` puts `<engine>/automation` on sys.path (resolved from
 $SHORTLISTR_ENGINE or the sibling `../shortlistr-main`) and sets `SHORTLISTR_PLATFORM_DB` so
 the platform owns its own data directory. Module names are unchanged, so the moved
 code needed no import rewriting beyond `jobs.review`/`jobs.publish` → `admin.*`

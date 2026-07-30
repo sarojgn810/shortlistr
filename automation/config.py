@@ -465,12 +465,22 @@ DISCOVERY_RESOLVE_PIPELINE = str(_discovery.get("resolve_pipeline_urls", "true")
 # ── Source registry (Phase 1.3) ───────────────────────────────────────────────
 
 _sources = _PROFILE.get("sources") if isinstance(_PROFILE.get("sources"), dict) else {}
-_default_enabled = ["watchlist_ats", "aggregators", "naukri", "search", "url_resolver", "gmail"]
+_default_enabled = [
+    "watchlist_ats",
+    "linkedin_guest",
+    "aggregators",
+    "naukri",
+    "search",
+    "url_resolver",
+    "gmail",
+]
 SOURCE_ENABLED = _as_list(_sources.get("enabled")) or _default_enabled
 
 _linkedin_src = _sources.get("linkedin") if isinstance(_sources.get("linkedin"), dict) else {}
 LINKEDIN_SOURCE_CONFIG = {
-    "enabled": str(_linkedin_src.get("enabled", "false")).lower() in ("true", "1", "yes"),
+    # Signed-out public job cards need no account or secret. Existing profiles
+    # gain the free source automatically; users can explicitly opt out.
+    "enabled": str(_linkedin_src.get("enabled", "true")).lower() in ("true", "1", "yes"),
     "mode": str(_linkedin_src.get("mode", "scrape_only")),
     "easy_apply": str(_linkedin_src.get("easy_apply", "false")).lower() in ("true", "1", "yes"),
 }

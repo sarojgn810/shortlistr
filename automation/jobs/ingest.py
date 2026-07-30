@@ -76,19 +76,22 @@ def run_ingest(*, dry_run: bool = False, ttl: int = INGEST_TTL_SECONDS) -> dict:
 
         run_id = store.start_run(dry_run=dry_run)
         passed, rejected, stats = discover_and_filter(log_totals=True)
-        all_jobs = passed + rejected
-        persisted = 0 if dry_run else persist_discovered(all_jobs, run_id=run_id)
+        gate = stats.get("persist_gate") or {}
+        persisted = 0 if dry_run else persist_discovered(passed, run_id=run_id)
         store.finish_run(
             run_id,
             source_stats=stats,
-            discovered=len(all_jobs),
+            discovered=int(gate.get("fetched") or (len(passed) + len(rejected))),
             passed=len(passed),
             strong_fit=sum(1 for j in passed if (j.fit_score or 0) >= 70),
         )
         return {
-            "discovered": len(all_jobs),
+            "discovered": int(gate.get("fetched") or (len(passed) + len(rejected))),
             "passed": len(passed),
             "persisted": persisted,
+            "kept": int(gate.get("kept") or len(passed)),
+            "dropped_off_target": int(gate.get("dropped_off_target") or 0),
+            "dropped_low_fit": int(gate.get("dropped_low_fit") or 0),
             "seconds": round((datetime.now(timezone.utc) - started).total_seconds(), 1),
             "dry_run": dry_run,
             "run_id": run_id,

@@ -253,12 +253,22 @@ export default function InboxPage() {
               if (res && "enqueued" in res) {
                 toast.success("Scan started — jobs will appear as sources finish");
               } else if (res && typeof res.relevant === "number") {
-                if (res.relevant === 0 && (res.off_target ?? 0) === 0 && res.discovered === 0) {
+                const kept = res.kept ?? res.relevant;
+                const dropped =
+                  (res.dropped_off_target ?? res.off_target ?? 0) +
+                  (res.dropped_low_fit ?? 0);
+                if (kept === 0 && (res.discovered ?? 0) === 0) {
                   toast.message("No new jobs found. Check your target titles in Profile and company sources in Connections.");
-                } else if (res.relevant === 0) {
-                  toast.message(`Scanned ${res.discovered} job(s) but none matched your profile. Adjust target titles or locations in Profile.`);
+                } else if (kept === 0) {
+                  toast.message(
+                    `Scanned ${res.discovered} job(s) but none cleared your profile gate. Adjust titles, locations, or fit floor in Profile.`,
+                  );
                 } else {
-                  toast.success(`Found ${res.relevant} matching · ${res.off_target ?? 0} off-target`);
+                  toast.success(
+                    dropped > 0
+                      ? `Saved ${kept} matching · skipped ${dropped} off-target/low-fit`
+                      : `Saved ${kept} matching`,
+                  );
                 }
               } else {
                 toast.success("Scan complete");
@@ -449,11 +459,11 @@ export default function InboxPage() {
           {savedJobCount > 0 && relevance === "relevant" ? (
             <>
               <p className="text-lg font-bold text-ink">
-                Nothing on target yet — {savedJobCount.toLocaleString()} saved
+                Nothing on target in view — {savedJobCount.toLocaleString()} stored
               </p>
               <p className="mt-2 text-sm text-stone">
-                Discovery found these but none match your target titles and locations.
-                See everything it found, or widen your targeting on the Profile page.
+                New scans only keep profile matches. Leftover rows are usually older
+                saves or in-flight applications. Widen targeting, or show everything stored.
               </p>
               <div className="mt-4 flex justify-center gap-2">
                 <Button variant="lime" onClick={() => setRelevance("all")}>

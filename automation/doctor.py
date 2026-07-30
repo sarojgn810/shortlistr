@@ -255,7 +255,7 @@ def check_llm() -> dict:
 
 
 def main() -> int:
-    print("\nshortlistr doctor")
+    print("\nautojob doctor")
     print("================\n")
 
     checks = [

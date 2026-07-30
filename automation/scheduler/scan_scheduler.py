@@ -109,8 +109,15 @@ def run_scheduled_scan(*, tenant_id: str = "default", dry_run: bool = False) -> 
     settings = get_automation_settings(tenant_id)
     passed, rejected, stats = discover_and_filter(log_totals=True)
     added = 0
-    if not dry_run and (passed or rejected):
-        added = persist_discovered(passed + rejected)
+    if not dry_run and passed:
+        added = persist_discovered(passed)
+        try:
+            from processors.enrich_jd import enrich_stub_jobs
+
+            stats["jd_enrich"] = enrich_stub_jobs(limit=20, allow_browser=False)
+        except Exception as exc:
+            logger.warning("JD enrich after scheduled scan failed: %s", exc)
+            stats["jd_enrich"] = {"error": str(exc)}
 
     evaluated = 0
     auto_approved = 0

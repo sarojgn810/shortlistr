@@ -220,8 +220,10 @@ def test_discover_scores_jobs_at_persist_time(monkeypatch, isolated_data_dir):
     # that has nothing to do with scoring-at-persist-time.
     monkeypatch.setattr(config, "SEARCH_KEYWORDS", ["SRE", "Site Reliability"])
     monkeypatch.setattr(config, "LOCATION_KEYWORDS", ["bengaluru", "remote"])
+    monkeypatch.setattr(config, "LOCATION_PREFERENCE_SET", True)
     monkeypatch.setattr(config, "WANTS_REMOTE", False)
     monkeypatch.setattr(config, "REMOTE_STRICT", False)
+    monkeypatch.setattr(config, "MIN_FIT_SCORE", 0)
 
     from orchestrator.discovery import discover_and_filter
     passed, rejected, stats = discover_and_filter()
@@ -229,6 +231,7 @@ def test_discover_scores_jobs_at_persist_time(monkeypatch, isolated_data_dir):
     assert len(all_jobs) >= 1
     scored = [j for j in all_jobs if j.fit_score > 0]
     assert len(scored) >= 1, "SRE job with k8s/terraform should have fit_score > 0"
+    assert "persist_gate" in stats
 
 
 def test_auto_evaluate_pending_without_llm_uses_heuristic(monkeypatch, isolated_data_dir):

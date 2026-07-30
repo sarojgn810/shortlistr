@@ -14,6 +14,25 @@ Template:
 
 ---
 
+## 2026-07-30 — Discover scanned thousands of jobs but almost none were good
+**Symptom:** Recent runs discovered ~3,900 jobs and passed ~29; Settings showed
+thousands saved while on-target yield stayed near zero. Live audit:
+watchlist_ats 3505→15 (0.4%), aggregators 131→5, Naukri/search/Ashby 0.
+**Root cause:** Three silent source failures plus the wrong search shape.
+1. Ashby GraphQL still queried removed fields (`isRemote`, `externalLink`); the
+   API answered HTTP 200 with `errors`, so every board looked empty.
+2. Naukri public search returned `406 recaptcha required` and was logged at
+   debug, then treated as "no results".
+3. DuckDuckGo HTML search returned HTTP 202 anomaly pages; `raise_for_status`
+   does not fail on 202, so all queries "succeeded" with zero cards.
+4. Separately, watchlist ATS downloads whole company boards (mostly EU/US
+   titles) instead of searching by keyword+location for India.
+**Fix:** Correct Ashby query; raise/surface Naukri CAPTCHA and DDG challenges
+via `FetchStats.error` + circuit failure; add free LinkedIn guest search for
+title×location; expand India-verified ATS boards only.
+**Guard:** `tests/test_source_failures.py`, `tests/test_linkedin_guest.py`,
+`automation/tools/source_audit.py`.
+
 ## 2026-07-30 — A dead worker wedged Scan permanently; button span for a day
 **Symptom:** The Discover "Scan job boards" button had been spinning since the
 previous evening. `GET /jobs/discover/status` returned `running: true` with a

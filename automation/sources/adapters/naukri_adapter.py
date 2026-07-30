@@ -24,6 +24,7 @@ class NaukriAdapter(SourceAdapter):
             raw = scrape_naukri()
         except Exception as e:
             logger.warning("Naukri scraper failed: %s", e)
+            stats.error = str(e)
             raw = []
 
         jobs: list[JobRecord] = []

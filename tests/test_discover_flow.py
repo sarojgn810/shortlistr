@@ -77,6 +77,12 @@ def test_progressive_persist_writes_after_each_source(isolated_data_dir, monkeyp
     store.init_db()
     monkeypatch.setattr(cfg, "SEARCH_KEYWORDS", ["Site Reliability Engineer", "SRE"])
     monkeypatch.setattr(cfg, "LOCATION_KEYWORDS", ["remote"])
+    monkeypatch.setattr(cfg, "LOCATION_PREFERENCE_SET", True)
+    monkeypatch.setattr(cfg, "WANTS_REMOTE", True)
+    monkeypatch.setattr(cfg, "REMOTE_STRICT", False)
+    # Short stub JDs score low — pin the floor so the progressive-write
+    # assertion is about persistence order, not fit heuristics.
+    monkeypatch.setattr(cfg, "MIN_FIT_SCORE", 0)
 
     persisted_snapshots: list[int] = []
 

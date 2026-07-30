@@ -1,9 +1,7 @@
-"""Changing targeting must re-judge the jobs already in the DB.
+"""Changing targeting must re-judge jobs already in the DB.
 
-Relevance and fit are stamped once, at discovery time. A first scan therefore
-runs against the field-neutral defaults, and without a retag every one of those
-rows keeps its off_target verdict — Discover stays empty while Settings reports
-thousands of saved jobs.
+The user DB is profile-scoped: mismatches are purged (except in-flight
+applications). Remaining keepers are re-tagged and re-scored.
 """
 
 from __future__ import annotations
@@ -35,13 +33,11 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(db_mod, "DB_PATH", str(tmp_path / "shortlistr.db"))
     monkeypatch.setattr(config, "SHORTLISTR_ROOT", str(tmp_path))
     yield tmp_path
-    # config globals are module state, not fixtures — reload from the real
-    # profile so the next test doesn't inherit this one's targeting.
     monkeypatch.undo()
     config.reload_discovery_config()
 
 
-def _seed_offtarget_job(location: str = "Hyderabad, India") -> str:
+def _seed_job(*, relevance: str = "off_target") -> str:
     from models.job import JobRecord
     from store import db as store
 
@@ -50,23 +46,29 @@ def _seed_offtarget_job(location: str = "Hyderabad, India") -> str:
         source="Greenhouse",
         company="Acme",
         title="Site Reliability Engineer",
-        location=location,
+        location="Hyderabad, India",
         jd_text="We run Kubernetes, Terraform and Prometheus at scale. " * 10,
-        metadata={"discovery_relevance": "off_target"},
+        fit_score=0 if relevance == "off_target" else 80,
+        metadata={"discovery_relevance": relevance},
     )
     store.upsert_jobs([job])
     return job.job_id
 
 
-def _stored(job_id: str) -> dict:
+def _stored(job_id: str) -> dict | None:
     from store import db as store
 
     with store.db() as conn:
         row = conn.execute(
             "SELECT fit_score, metadata_json FROM jobs WHERE id = ?", (job_id,)
         ).fetchone()
+    if row is None:
+        return None
     meta = json.loads(dict(row)["metadata_json"] or "{}")
-    return {"fit_score": dict(row)["fit_score"], "relevance": meta.get("discovery_relevance")}
+    return {
+        "fit_score": dict(row)["fit_score"],
+        "relevance": meta.get("discovery_relevance"),
+    }
 
 
 def test_retag_promotes_jobs_that_now_match(isolated):
@@ -74,36 +76,60 @@ def test_retag_promotes_jobs_that_now_match(isolated):
 
     _write_profile(str(isolated), titles=["Product Manager"], locations=["Berlin"])
     config.reload_discovery_config()
-    job_id = _seed_offtarget_job()
+    job_id = _seed_job(relevance="off_target")
     assert _stored(job_id)["relevance"] == "off_target"
 
     _write_profile(str(isolated), titles=["Site Reliability Engineer"], locations=["Hyderabad"])
     config.reload_discovery_config()
     result = retag_existing_jobs()
 
-    assert result["updated"] == 1
     assert result["relevant"] == 1
+    assert result["purged"] == 0
     stored = _stored(job_id)
+    assert stored is not None
     assert stored["relevance"] == "relevant"
     assert stored["fit_score"] >= 40
 
 
-def test_retag_demotes_jobs_that_no_longer_match(isolated):
+def test_retag_purges_jobs_that_no_longer_match(isolated):
     from orchestrator.discovery import retag_existing_jobs
 
     _write_profile(str(isolated), titles=["Site Reliability Engineer"], locations=["Hyderabad"])
     config.reload_discovery_config()
-    job_id = _seed_offtarget_job()
+    job_id = _seed_job(relevance="relevant")
     retag_existing_jobs()
     assert _stored(job_id)["relevance"] == "relevant"
 
     _write_profile(str(isolated), titles=["Product Manager"], locations=["Berlin"])
     config.reload_discovery_config()
-    retag_existing_jobs()
+    result = retag_existing_jobs()
 
+    assert result["purged"] == 1
+    assert _stored(job_id) is None
+
+
+def test_retag_keeps_applied_jobs_even_when_off_target(isolated):
+    from orchestrator.discovery import retag_existing_jobs
+    from store import db as store
+
+    _write_profile(str(isolated), titles=["Site Reliability Engineer"], locations=["Hyderabad"])
+    config.reload_discovery_config()
+    job_id = _seed_job(relevance="relevant")
+    with store.db() as conn:
+        conn.execute(
+            "INSERT INTO applications (job_id, status, applied_date) VALUES (?, 'applied', date('now'))",
+            (job_id,),
+        )
+
+    _write_profile(str(isolated), titles=["Product Manager"], locations=["Berlin"])
+    config.reload_discovery_config()
+    result = retag_existing_jobs()
+
+    assert result["purged"] == 0
+    assert result["protected"] == 1
     stored = _stored(job_id)
+    assert stored is not None
     assert stored["relevance"] == "off_target"
-    assert stored["fit_score"] == 0
 
 
 def test_profile_save_retags_when_targeting_changes(isolated, monkeypatch):
@@ -115,7 +141,7 @@ def test_profile_save_retags_when_targeting_changes(isolated, monkeypatch):
 
     _write_profile(str(isolated), titles=["Product Manager"], locations=["Berlin"])
     config.reload_discovery_config()
-    job_id = _seed_offtarget_job()
+    job_id = _seed_job(relevance="off_target")
 
     profile_store.save_profile_from_ui(
         {
@@ -126,4 +152,6 @@ def test_profile_save_retags_when_targeting_changes(isolated, monkeypatch):
         }
     )
 
-    assert _stored(job_id)["relevance"] == "relevant"
+    stored = _stored(job_id)
+    assert stored is not None
+    assert stored["relevance"] == "relevant"

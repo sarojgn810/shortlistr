@@ -271,6 +271,31 @@ def prepare_job_for_eval(row: dict) -> tuple[str, str, str, str]:
             if is_placeholder(title):
                 title = resolved.get("title") or title
 
+    if len((jd or "").strip()) < 200 and url:
+        try:
+            from processors.enrich_jd import enrich_job_page
+            from store.enrich import persist_resolved_job as _persist
+
+            page = enrich_job_page(
+                {"url": url, "title": title, "source": row.get("source") or ""},
+                allow_browser=False,
+            )
+            if page.get("ok") and page.get("jd_text"):
+                jd = page["jd_text"]
+                _persist(
+                    job_id,
+                    {
+                        "company": company,
+                        "title": page.get("title") or title,
+                        "location": row.get("location") or "",
+                        "jd_snippet": jd,
+                    },
+                )
+                if is_placeholder(title) and page.get("title"):
+                    title = page["title"]
+        except Exception:
+            pass
+
     if not jd.strip():
         jd = f"Job posting at {company or 'company'} for {title or 'role'}. URL: {url}"
 
