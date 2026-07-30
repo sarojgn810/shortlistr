@@ -19,7 +19,7 @@ MIGRATIONS_DIR = os.path.join(os.path.dirname(__file__), "migrations")
 
 # ── two databases, one schema ────────────────────────────────────────────────
 #
-# The PERSONAL database (data/shortlistr.db) is the owner's own job search: their
+# The default database (data/shortlistr.db) is the owner's own job search: their
 # discovery inbox, evaluations, applications. Anyone who clones the repo gets
 # only this one.
 #
