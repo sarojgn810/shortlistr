@@ -1,0 +1,41 @@
+% Awesome CV — accent-coloured name and section titles, rule to the margin.
+%
+% Layout idea from posquit0/Awesome-CV (LPPL). Reimplemented single-column on
+% shortlistr's own macros: the original's filled header band puts white text on a
+% colour box, and enough ATS parsers drop or reorder box content that it is not
+% worth the look. The accent survives; the risk does not.
+{{PREAMBLE}}
+
+% ── Look ─────────────────────────────────────────────────────────────────
+\definecolor{cvaccent}{HTML}{C0392B}
+\definecolor{cvmuted}{HTML}{555555}
+
+% Title, then a rule that fills the rest of the line. \leaders repeats a rule
+% box across the leftover space, so the rule always stops exactly at the right
+% margin whatever the title's width.
+\renewcommand{\cvsectionfont}[1]{%
+  {\large\bfseries\color{cvaccent} #1}\hspace{0.6em}%
+  \leaders\hrule height 1.1pt\hfill\kern0pt
+}
+\renewcommand{\cvsectionrule}{}
+
+\renewcommand{\cvheader}[2]{%
+  {\fontsize{24}{27}\selectfont\bfseries\color{cvaccent} #1}\par\vspace{4pt}%
+  {\small\color{cvmuted} #2}\par\vspace{5pt}%
+  {\color{cvaccent}\hrule height 1.4pt}%
+  \vspace{2pt}%
+}
+
+\begin{document}
+
+\cvheader{ {{NAME}} }{ {{CONTACT}} }
+
+{{SUMMARY}}
+{{SKILLS}}
+{{EXPERIENCE}}
+{{PROJECTS}}
+{{EDUCATION}}
+{{CERTIFICATIONS}}
+{{ADDITIONAL}}
+
+\end{document}

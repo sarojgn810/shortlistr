@@ -1,0 +1,34 @@
+% Professional — one accent colour, thin rules, nothing shouting.
+%
+% The general-purpose pick: enough design that the page does not look like a
+% text dump, little enough that it never distracts from what it says.
+{{PREAMBLE}}
+
+% ── Look ─────────────────────────────────────────────────────────────────
+\definecolor{cvaccent}{HTML}{1F4E79}
+\definecolor{cvmuted}{HTML}{505A64}
+
+\renewcommand{\cvsectionfont}[1]{{\large\bfseries\color{cvaccent} #1}}
+\renewcommand{\cvsectionrule}{\vspace{1.5pt}{\color{cvaccent!50}\hrule height 0.7pt}}
+\renewcommand{\cvdatefont}[1]{{\small\color{cvmuted} #1}}
+
+\renewcommand{\cvheader}[2]{%
+  {\fontsize{22}{25}\selectfont\bfseries\color{cvaccent} #1}\par\vspace{3pt}%
+  {\small\color{cvmuted} #2}\par\vspace{4pt}%
+  {\color{cvaccent}\hrule height 1pt}%
+  \vspace{2pt}%
+}
+
+\begin{document}
+
+\cvheader{ {{NAME}} }{ {{CONTACT}} }
+
+{{SUMMARY}}
+{{SKILLS}}
+{{EXPERIENCE}}
+{{PROJECTS}}
+{{EDUCATION}}
+{{CERTIFICATIONS}}
+{{ADDITIONAL}}
+
+\end{document}

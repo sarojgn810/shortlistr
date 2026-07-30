@@ -1,0 +1,39 @@
+% Split Header — name left, contact right, body single column.
+%
+% Was a genuine two-column sidebar (idea from jankapunkt/latexcv). A sidebar
+% is the single most reliable way to fail an ATS: the extractor walks the page
+% in one stream and interleaves the sidebar into the body, so a phone number
+% lands in the middle of a job bullet. The split is kept where it costs
+% nothing — the two-line header — and the body runs full width.
+{{PREAMBLE}}
+
+% ── Look ─────────────────────────────────────────────────────────────────
+\definecolor{cvaccent}{HTML}{2C3E50}
+\definecolor{cvmuted}{HTML}{5D6D7E}
+
+\renewcommand{\cvsectionfont}[1]{{\large\bfseries\color{cvaccent} #1}}
+\renewcommand{\cvsectionrule}{\vspace{2pt}{\color{cvaccent}\hrule height 0.9pt}}
+
+% \cvsplit keeps the right-hand block flush to the margin; see the preamble
+% for why plain \hfill does not.
+\renewcommand{\cvheader}[2]{%
+  \cvsplit{{\fontsize{23}{26}\selectfont\bfseries\color{cvaccent} #1}}%
+          {\parbox[b]{0.44\linewidth}{\raggedleft\small\color{cvmuted} #2}}%
+  \vspace{5pt}%
+  {\color{cvaccent}\hrule height 1.2pt}%
+  \vspace{2pt}%
+}
+
+\begin{document}
+
+\cvheader{ {{NAME}} }{ {{CONTACT}} }
+
+{{SUMMARY}}
+{{SKILLS}}
+{{EXPERIENCE}}
+{{PROJECTS}}
+{{EDUCATION}}
+{{CERTIFICATIONS}}
+{{ADDITIONAL}}
+
+\end{document}

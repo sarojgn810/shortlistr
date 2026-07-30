@@ -1,0 +1,37 @@
+% Executive — heavy rules, slate accent, summary given the most weight.
+%
+% Section titles are renamed in templates.py ("Executive Summary", "Core
+% Competencies"). All three remain strings an ATS recognises as standard
+% headings; "Career History" would not be, so Experience keeps its name.
+{{PREAMBLE}}
+
+% ── Look ─────────────────────────────────────────────────────────────────
+\definecolor{cvaccent}{HTML}{1B2A41}
+\definecolor{cvmuted}{HTML}{4A5568}
+
+\renewcommand{\cvsectionfont}[1]{{\large\bfseries\color{cvaccent} #1}}
+\renewcommand{\cvsectionrule}{\vspace{2pt}{\color{cvaccent}\hrule height 1.4pt}}
+\renewcommand{\cventryfont}[1]{{\bfseries\color{cvaccent} #1}}
+
+\renewcommand{\cvheader}[2]{%
+  {\color{cvaccent}\hrule height 2.4pt}%
+  \vspace{6pt}%
+  {\fontsize{24}{27}\selectfont\bfseries\color{cvaccent} #1}\par\vspace{4pt}%
+  {\small\color{cvmuted} #2}\par\vspace{6pt}%
+  {\color{cvaccent}\hrule height 0.8pt}%
+  \vspace{2pt}%
+}
+
+\begin{document}
+
+\cvheader{ {{NAME}} }{ {{CONTACT}} }
+
+{{SUMMARY}}
+{{SKILLS}}
+{{EXPERIENCE}}
+{{PROJECTS}}
+{{EDUCATION}}
+{{CERTIFICATIONS}}
+{{ADDITIONAL}}
+
+\end{document}

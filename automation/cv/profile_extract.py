@@ -1,0 +1,234 @@
+"""Best-effort extraction of structured profile fields from resume markdown.
+
+Used to pre-fill the onboarding Profile step when a user uploads a résumé. Every
+field is heuristic and meant to be reviewed by the user — we only return values
+we are reasonably confident about and omit the rest so they never clobber a field
+the user already typed.
+"""
+
+from __future__ import annotations
+
+import datetime
+import re
+from typing import Any
+
+from cv.parser import infer_cv_name, parse_cv_markdown
+
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+_PHONE_RE = re.compile(r"(?<!\w)(\+?\d[\d\s\-().]{8,}\d)(?!\w)")
+_LINKEDIN_RE = re.compile(r"(?:https?://)?(?:www\.)?linkedin\.com/in/[^\s)|,]+", re.I)
+_GITHUB_RE = re.compile(r"(?:https?://)?(?:www\.)?github\.com/[^\s)|,]+", re.I)
+_URL_RE = re.compile(r"https?://[^\s)|,]+", re.I)
+_YEARS_RE = re.compile(r"(\d{1,2})\+?\s*(?:years?|yrs?)\b", re.I)
+# Words that mark a segment as a job title rather than a company name.
+_ROLE_WORD_RE = re.compile(
+    r"\b(engineer|engineering|developer|analyst|manager|lead|architect|consultant|"
+    r"administrator|specialist|tester|sre|devops|scientist|designer|support|"
+    r"associate|executive|officer|head|director|intern|programmer|technician)\b",
+    re.I,
+)
+# Segments carrying these are employer names, not job titles.
+_CORP_SUFFIX_RE = re.compile(
+    r"\b(pvt|private|ltd|limited|inc|llc|llp|plc|gmbh|corp|corporation|technologies|"
+    r"technology|solutions|systems|services|consultancy|consulting|labs|software|"
+    r"infotech|industries|group|holdings|enterprises|associates)\b", re.I)
+_MONTH_RE = re.compile(
+    r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\b", re.I)
+_YEAR_TOKEN_RE = re.compile(r"\b(?:19|20)\d{2}\b")
+_PRESENT_RE = re.compile(r"\b(present|current|now|till\s*date|todate)\b", re.I)
+_SENIORITY_PREFIX_RE = re.compile(
+    r"^(senior|sr\.?|lead|principal|staff|junior|jr\.?|associate|assistant)\s+",
+    re.I,
+)
+
+# A location line looks like "City, Region" / "City, Country" but is not an
+# email, URL, or phone number.
+_LOCATION_RE = re.compile(
+    r"^[A-Za-z][A-Za-z .'-]{1,40},\s*[A-Za-z][A-Za-z .'-]{1,40}$"
+)
+
+
+def _clean_url(url: str) -> str:
+    url = url.strip().rstrip(".,;)")
+    if not url.lower().startswith("http"):
+        url = "https://" + url
+    return url
+
+
+def _first_email(text: str) -> str:
+    m = _EMAIL_RE.search(text)
+    return m.group(0) if m else ""
+
+
+def _first_phone(text: str) -> str:
+    for m in _PHONE_RE.finditer(text):
+        candidate = m.group(1).strip()
+        digits = re.sub(r"\D", "", candidate)
+        # Avoid matching year ranges / id numbers — real phone numbers have 10-15 digits.
+        if 10 <= len(digits) <= 15:
+            return candidate
+    return ""
+
+
+def _first(pattern: re.Pattern[str], text: str) -> str:
+    m = pattern.search(text)
+    return _clean_url(m.group(0)) if m else ""
+
+
+# Separators seen in résumé contact lines: pipes, bullets, middle dots, slashes.
+_CONTACT_SEP_RE = re.compile(r"[|\n•·∙‧/]+")
+
+
+def _clean_segment(raw: str) -> str:
+    # Strip markdown emphasis and surrounding punctuation/space.
+    return raw.replace("*", "").replace("_", "").strip(" \t,-–—|·•")
+
+
+def _extract_location(contact: str) -> str:
+    for raw in _CONTACT_SEP_RE.split(contact):
+        line = _clean_segment(raw)
+        if not line or "@" in line or _URL_RE.search(line):
+            continue
+        if re.search(r"\d{4,}", line):  # skip phone-ish / postal-code-ish lines
+            continue
+        if _LOCATION_RE.match(line):
+            return line
+    return ""
+
+
+def _extract_years_exp(md: str, summary: str, experience: str) -> int:
+    # Prefer an explicit "N years" claim in the summary — most reliable signal.
+    for source in (summary, md):
+        m = _YEARS_RE.search(source or "")
+        if m:
+            n = int(m.group(1))
+            if 0 < n <= 60:
+                return n
+    # Fall back to the span of years mentioned in the experience section.
+    years = [int(y) for y in re.findall(r"(?:19|20)\d{2}", experience or "")]
+    if years:
+        start = min(years)
+        end = datetime.date.today().year if _PRESENT_RE.search(experience or "") else max(years)
+        span = end - start
+        if 0 < span <= 60:
+            return span
+    return 0
+
+
+
+def _normalize_heading_title(raw: str) -> list[str]:
+    s = raw.strip()
+    if not s.startswith("###"):
+        return []
+    s = s.lstrip("#").strip()
+    # Drop trailing date ranges and split company/title separators.
+    s = _YEAR_TOKEN_RE.split(s)[0]
+    s = _MONTH_RE.sub(" ", s)
+    s = re.sub(r"[|–—\-]+\s*$", "", s).strip(" |,-–—")
+    segs = [x.strip(" ,") for x in
+            re.split(r"\s*[|–—,]\s*|\s+at\s+|\s+@\s+", s) if x.strip(" ,")]
+    return [x for x in segs if 2 <= len(x.split()) <= 7 and not re.search(r"\d", x)]
+
+
+def _extract_titles(experience: str, summary: str) -> list[str]:
+    """Best-effort role titles, ordered from most-recent to older."""
+    # PDF ingest renders dated role lines as "### <role line with a year>".
+    headings: list[list[str]] = []
+    for line in (experience or "").splitlines():
+        segs = _normalize_heading_title(line.strip())
+        if segs:
+            headings.append(segs)
+
+    # Both "Title | Company" and "Company | Title" are common, so position can't
+    # decide it — the segment naming a role is the title.
+    titles: list[str] = []
+    for segs in headings:
+        for seg in segs:
+            if _ROLE_WORD_RE.search(seg):
+                if seg not in titles:
+                    titles.append(seg)
+    # No role word anywhere: the summary opening ("Senior SRE with 9 years…") is a
+    # better guess than a heading that is probably the employer's name.
+    if titles:
+        return titles
+    first = (summary or "").strip().splitlines()[0] if summary else ""
+    first = re.split(r"\s+with\s+|\s*[.,]\s*", first, maxsplit=1)[0].strip()
+    if first and 1 <= len(first.split()) <= 7 and not re.search(r"\d", first):
+        return [first]
+    for segs in headings:
+        for seg in segs:
+            if not _CORP_SUFFIX_RE.search(seg):
+                return [seg]
+    return []
+
+
+def _title_aliases(title: str) -> list[str]:
+    out: list[str] = []
+
+    def _add(candidate: str) -> None:
+        candidate = re.sub(r"\s+", " ", candidate).strip(" ,")
+        if candidate and candidate not in out:
+            out.append(candidate)
+
+    _add(title)
+    stripped = _SENIORITY_PREFIX_RE.sub("", title).strip()
+    if stripped and stripped != title:
+        _add(stripped)
+
+    lower = title.lower()
+    if "site reliability engineer" in lower:
+        _add("SRE")
+        _add("Site Reliability Engineer")
+    if "devops" in lower:
+        _add("DevOps Engineer")
+    if "platform engineer" in lower:
+        _add("Platform Engineer")
+    return out
+
+
+def extract_profile_fields(md: str) -> dict[str, Any]:
+    """Return only the fields we could confidently pull from the résumé."""
+    out: dict[str, Any] = {}
+    if not md or not md.strip():
+        return out
+
+    sections = parse_cv_markdown(md)
+    contact_blob = "\n".join(filter(None, [sections.name, sections.contact, md[:600]]))
+
+    name = infer_cv_name(md, sections)
+    email = _first_email(contact_blob) or _first_email(md)
+    phone = _first_phone(contact_blob) or _first_phone(md)
+    linkedin = _first(_LINKEDIN_RE, md)
+    github = _first(_GITHUB_RE, md)
+    location = _extract_location(sections.contact or md[:400])
+    years_exp = _extract_years_exp(md, sections.summary, sections.experience)
+    titles = _extract_titles(sections.experience, sections.summary)
+
+    if name:
+        out["name"] = name
+    if email:
+        out["email"] = email
+    if phone:
+        out["phone"] = phone
+    if linkedin:
+        out["linkedin"] = linkedin
+    if github:
+        out["github"] = github
+    if location:
+        out["location"] = location
+        # Seed preferred locations with the home city so targeting isn't global.
+        city = location.split(",")[0].strip()
+        if city:
+            out["preferred_locations"] = [city]
+    if years_exp:
+        out["years_exp"] = years_exp
+    if titles:
+        expanded: list[str] = []
+        for i, title in enumerate(titles[:5]):
+            aliases = _title_aliases(title) if i == 0 else [title]
+            for alias in aliases:
+                if alias not in expanded:
+                    expanded.append(alias)
+        out["target_titles"] = expanded
+
+    return out

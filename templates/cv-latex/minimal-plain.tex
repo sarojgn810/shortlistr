@@ -1,0 +1,32 @@
+% Minimal Plain — no colour, no rules, no accent. Black on white.
+%
+% The fallback for a parser that has surprised you: there is nothing here for
+% it to get wrong. Headings are bold and nothing else.
+{{PREAMBLE}}
+
+% ── Look ─────────────────────────────────────────────────────────────────
+\definecolor{cvaccent}{HTML}{000000}
+\definecolor{cvmuted}{HTML}{000000}
+
+\renewcommand{\cvsectionfont}[1]{{\normalsize\bfseries #1}}
+\renewcommand{\cvsectionrule}{}
+\renewcommand{\cvmetafont}[1]{{\small\itshape #1}}
+
+\renewcommand{\cvheader}[2]{%
+  {\fontsize{18}{21}\selectfont\bfseries #1}\par\vspace{2pt}%
+  {\small #2}\par\vspace{3pt}%
+}
+
+\begin{document}
+
+\cvheader{ {{NAME}} }{ {{CONTACT}} }
+
+{{SUMMARY}}
+{{SKILLS}}
+{{EXPERIENCE}}
+{{PROJECTS}}
+{{EDUCATION}}
+{{CERTIFICATIONS}}
+{{ADDITIONAL}}
+
+\end{document}

@@ -1,0 +1,20 @@
+Evaluate the job posting against the candidate CV.
+
+Return ONLY valid JSON (no markdown fences) with this structure:
+{
+  "score": 0.0 to 5.0,
+  "legitimacy": "verified|likely|uncertain|suspicious|expired",
+  "company": "company name",
+  "role": "job title",
+  "blocks": {
+    "A": "Role summary and fit",
+    "B": "Requirements match",
+    "C": "Compensation and logistics",
+    "D": "Risks and gaps",
+    "E": "Application strategy",
+    "F": "Interview angles",
+    "G": "Posting legitimacy assessment"
+  }
+}
+
+Be honest. Score below 4.0 if not a strong fit. Cite specific JD requirements in blocks.

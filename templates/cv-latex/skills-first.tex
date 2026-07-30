@@ -1,0 +1,35 @@
+% Skills First — the keyword block sits above the summary.
+%
+% For scanners that weight the top of the document, and for the human who is
+% filtering on a stack rather than a story. Only the section order differs
+% from the reference design; everything else is deliberately unremarkable so
+% the keyword block is the thing that stands out.
+{{PREAMBLE}}
+
+% ── Look ─────────────────────────────────────────────────────────────────
+\definecolor{cvaccent}{HTML}{0F766E}
+\definecolor{cvmuted}{HTML}{475569}
+
+\renewcommand{\cvsectionfont}[1]{{\large\bfseries\color{cvaccent} #1}}
+\renewcommand{\cvsectionrule}{\vspace{1.5pt}{\color{cvaccent!40}\hrule height 0.8pt}}
+
+\renewcommand{\cvheader}[2]{%
+  {\fontsize{22}{25}\selectfont\bfseries #1}\par\vspace{3pt}%
+  {\small\color{cvmuted} #2}\par\vspace{4pt}%
+  {\color{cvaccent}\hrule height 1.2pt}%
+  \vspace{2pt}%
+}
+
+\begin{document}
+
+\cvheader{ {{NAME}} }{ {{CONTACT}} }
+
+{{SKILLS}}
+{{SUMMARY}}
+{{EXPERIENCE}}
+{{PROJECTS}}
+{{EDUCATION}}
+{{CERTIFICATIONS}}
+{{ADDITIONAL}}
+
+\end{document}

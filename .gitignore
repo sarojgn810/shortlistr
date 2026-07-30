@@ -1,0 +1,94 @@
+# ── Personal data (never commit) ─────────────────────────────────────────────
+cv.md
+config/profile.yml
+portals.yml
+modes/_profile.md
+article-digest.md
+data/applications.md
+data/*.bak
+data/*.db.bak-*
+/applications.md
+*.bak
+data/pipeline.md
+data/scan-history.tsv
+data/follow-ups.md
+data/Job_Application_Tracker.xlsx
+reports/*.md
+!reports/.gitkeep
+output/*
+!output/.gitkeep
+interview-prep/*
+!interview-prep/.gitkeep
+jds/*
+!jds/.gitkeep
+batch/batch-state.tsv
+batch/batch-input.tsv
+batch/logs/*
+!batch/logs/.gitkeep
+batch/tracker-additions/**/*.tsv
+!batch/tracker-additions/.gitkeep
+
+# ── Secrets ─────────────────────────────────────────────────────────────────
+.env
+automation/gmail_credentials.json
+automation/gmail_token.pickle
+automation/token.json
+automation/.browser_sessions/
+automation/config/profile.yml
+automation/user/
+
+# ── Generated / deps ────────────────────────────────────────────────────────
+node_modules/
+# package-lock.json is NOT ignored. Ignoring it made CI fail on every push
+# since it was added — setup-node could not resolve its cache path, and
+# `npm ci` requires a lock file at all — and it meant a cloner resolved a
+# different dependency tree than the one this repo was tested against.
+dashboard/node_modules/
+dashboard/.next/
+dashboard/.env.local
+dashboard/tsconfig.tsbuildinfo
+.resolved-prompt-*
+.update-dismissed
+.update-lock
+shortlistr-dashboard
+.pytest_cache/
+
+# ── Personal files (repo root) ───────────────────────────────────────────────
+*.pdf
+*.docx
+*_Master_Resume.md
+resume*.md
+
+# Coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+
+# ── Generated runtime outputs ─────────────────────────────────────────────────
+data/*.json
+data/apply_queue.md
+data/shortlistr.db
+data/cache/
+data/source_circuits.json
+*.shortlistr
+__pycache__/
+*.pyc
+automation/logs/
+
+# ── OS / IDE ────────────────────────────────────────────────────────────────
+.DS_Store
+.gstack/
+
+# Blank-slate reset backups
+.reset-backup/
+logs/
+data/.ingest.lock
+
+# Anchor's confidential requisitions — regenerable from her export via
+# scripts/import_anchor_jds.py, so they never need to enter git history.
+jds/anchor-*.md
+batch/anchor-*.csv
+
+# Layer 3 database — candidate PII, never committed
+data/platform.db
+data/*.pre-split-*

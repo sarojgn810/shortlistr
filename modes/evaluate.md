@@ -1,0 +1,227 @@
+# Mode: evaluate — Full A–G Evaluation
+
+When the candidate pastes an offer (text or URL), ALWAYS deliver all 7 blocks (A–F evaluation + G legitimacy):
+
+## Step 0 — Structured eval (EvalService)
+
+Before writing blocks A–G, run:
+
+```bash
+make evaluate ARGS="URL=<url>"
+```
+
+Or: `python3 -m automation.cli evaluate <url>`
+
+Incorporate the JSON result (`score`, `legitimacy`, `blocks`) into your report header. If CLI is unavailable, continue with manual evaluation below.
+
+## Step 1 — Archetype Detection
+
+Classify the offer into one of 6 archetypes (see `_shared.md`). If hybrid, indicate the 2 closest. This determines:
+- Which proof points to prioritize in block B
+- How to rewrite the summary in block E
+- Which STAR stories to prepare in block F
+
+## Block A — Role Summary
+
+Table with:
+- Detected archetype
+- Domain (platform/agentic/LLMOps/ML/enterprise)
+- Function (build/consult/manage/deploy)
+- Seniority
+- Remote (full/hybrid/onsite)
+- Team size (if mentioned)
+- TL;DR in one sentence
+
+## Block B — CV Match
+
+Read `cv.md`. Create a table mapping each JD requirement to exact CV lines.
+
+**Adapted to archetype:**
+- If FDE → prioritize fast delivery and client-facing proof points
+- If SA → prioritize system design and integrations
+- If PM → prioritize product discovery and metrics
+- If LLMOps → prioritize evals, observability, pipelines
+- If Agentic → prioritize multi-agent, HITL, orchestration
+- If Transformation → prioritize change management, adoption, scaling
+
+**Gaps section** with mitigation strategy for each. For each gap:
+1. Is it a hard blocker or nice-to-have?
+2. Can the candidate demonstrate adjacent experience?
+3. Is there a portfolio project that covers this gap?
+4. Concrete mitigation plan (cover letter phrase, quick project, etc.)
+
+## Block C — Level and Strategy
+
+1. **Level detected** in JD vs **candidate's natural level for that archetype**
+2. **"Sell senior without lying" plan**: archetype-specific phrases, concrete achievements to highlight, how to position founder experience as an advantage
+3. **"If downleveled" plan**: accept if comp is fair, negotiate 6-month review, clear promotion criteria
+
+## Block D — Comp and Demand
+
+Use WebSearch for:
+- Current salaries for the role (Glassdoor, Levels.fyi, Blind)
+- Company's compensation reputation
+- Role demand trend
+
+Table with data and cited sources. If no data, say so instead of inventing.
+
+## Block E — Personalization Plan
+
+| # | Section | Current state | Proposed change | Why |
+|---|---------|---------------|-----------------|-----|
+| 1 | Summary | ... | ... | ... |
+| ... | ... | ... | ... | ... |
+
+Top 5 CV changes + Top 5 LinkedIn changes to maximize match.
+
+## Block F — Interview Plan
+
+6–10 STAR+R stories mapped to JD requirements (STAR + **Reflection**):
+
+| # | JD requirement | STAR+R story | S | T | A | R | Reflection |
+|---|----------------|--------------|---|---|---|---|------------|
+
+The **Reflection** column captures what was learned or what would be done differently. This signals seniority — junior candidates describe what happened, senior candidates extract lessons.
+
+**Story Bank:** If `interview-prep/story-bank.md` exists, check if any stories are already there. If not, append new ones. Over time this builds a reusable bank of 5–10 master stories adaptable to any interview question.
+
+**Selected and framed by archetype:**
+- FDE → emphasize delivery speed and client-facing work
+- SA → emphasize architecture decisions
+- PM → emphasize discovery and trade-offs
+- LLMOps → emphasize metrics, evals, production hardening
+- Agentic → emphasize orchestration, error handling, HITL
+- Transformation → emphasize adoption and organizational change
+
+Also include:
+- 1 recommended case study (which project to present and how)
+- Red-flag questions and how to answer them (e.g., "why did you sell your company?", "do you have direct reports?")
+
+## Block G — Posting Legitimacy
+
+Analyze the job posting for signals that indicate whether this is a real, active opening. This helps the user prioritize effort on opportunities most likely to result in a hiring process.
+
+**Ethical framing:** Present observations, not accusations. Every signal has legitimate explanations. The user decides how to weigh them.
+
+### Signals to analyze (in order):
+
+**1. Posting Freshness** (from Playwright snapshot, captured in Step 0):
+- Date posted or "X days ago" — extract from page
+- Apply button state (active / closed / missing / redirects to generic page)
+- If URL redirected to generic careers page, note it
+
+**2. Description Quality** (from JD text):
+- Does it name specific technologies, frameworks, tools?
+- Does it mention team size, reporting structure, or org context?
+- Are requirements realistic? (years of experience vs technology age)
+- Is there clear scope for the first 6–12 months?
+- Is salary/compensation mentioned?
+- What ratio of the JD is role-specific vs generic boilerplate?
+- Any internal contradictions? (entry-level title + staff requirements, etc.)
+
+**3. Company Hiring Signals** (2–3 WebSearch queries, combine with Block D research):
+- Search: `"{company}" layoffs {year}` — note date, scale, departments
+- Search: `"{company}" hiring freeze {year}` — note any announcements
+- If layoffs found: are they in the same department as this role?
+
+**4. Reposting Detection** (from scan-history.tsv):
+- Check if company + similar role title appeared before with a different URL
+- Note how many times and over what period
+
+**5. Role Market Context** (qualitative, no additional queries):
+- Is this a common role that typically fills in 4–6 weeks?
+- Does the role make sense for this company's business?
+- Is the seniority level one that legitimately takes longer to fill?
+
+### Output format:
+
+**Assessment:** One of three tiers:
+- **High Confidence** — Multiple signals suggest a real, active opening
+- **Proceed with Caution** — Mixed signals worth noting
+- **Suspicious** — Multiple ghost job indicators, investigate before investing time
+
+**Signals table:** Each signal observed with its finding and weight (Positive / Neutral / Concerning).
+
+**Context Notes:** Any caveats (niche role, government job, evergreen position, etc.) that explain potentially concerning signals.
+
+### Edge case handling:
+- **Government/academic postings:** Longer timelines are standard. Adjust thresholds (60–90 days is normal).
+- **Evergreen/continuous hire postings:** If the JD explicitly says "ongoing" or "rolling," note as context — not a ghost job, it's a pipeline role.
+- **Niche/executive roles:** Staff+, VP, Director, or highly specialized roles legitimately stay open for months. Adjust age thresholds accordingly.
+- **No date available:** If posting age cannot be determined and no other signals are concerning, default to "Proceed with Caution" with a note that limited data was available. NEVER default to "Suspicious" without evidence.
+- **Recruiter-sourced (no public posting):** Freshness signals unavailable. Note that active recruiter contact is itself a positive legitimacy signal.
+
+---
+
+## Post-evaluation
+
+**ALWAYS** after generating blocks A–G:
+
+### 1. Save report .md
+
+Save full evaluation in `reports/{###}-{company-slug}-{YYYY-MM-DD}.md`.
+
+- `{###}` = next sequential number (3 digits, zero-padded)
+- `{company-slug}` = company name lowercase, spaces as hyphens
+- `{YYYY-MM-DD}` = current date
+
+**Report format:**
+
+```markdown
+# Evaluation: {Company} — {Role}
+
+**Date:** {YYYY-MM-DD}
+**Archetype:** {detected}
+**Score:** {X/5}
+**Legitimacy:** {High Confidence | Proceed with Caution | Suspicious}
+**PDF:** {path or pending}
+
+---
+
+## A) Role Summary
+(full block A content)
+
+## B) CV Match
+(full block B content)
+
+## C) Level and Strategy
+(full block C content)
+
+## D) Comp and Demand
+(full block D content)
+
+## E) Personalization Plan
+(full block E content)
+
+## F) Interview Plan
+(full block F content)
+
+## G) Posting Legitimacy
+(full block G content)
+
+## H) Draft Application Answers
+(only if score >= 4.5 — draft answers for application form)
+
+---
+
+## Extracted keywords
+(list of 15–20 JD keywords for ATS optimization)
+```
+
+### 2. Register in tracker
+
+**ALWAYS** register in `data/applications.md`:
+- Next sequential number
+- Current date
+- Company
+- Role
+- Score: match average (1–5)
+- Status: `Evaluated`
+- PDF: ❌ (or ✅ if evaluate-full generated PDF)
+- Report: relative link to report .md (e.g., `[001](reports/001-company-2026-01-01.md)`)
+
+**Tracker format:**
+
+```markdown
+| # | Date | Company | Role | Score | Status | PDF | Report |
+```

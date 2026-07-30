@@ -1,0 +1,20 @@
+{
+  "jobs": [
+    {
+      "id": 101,
+      "title": "Senior Site Reliability Engineer",
+      "absolute_url": "https://job-boards.greenhouse.io/datadog/jobs/101",
+      "location": {"name": "Remote - India"},
+      "content": "<p>Kubernetes Prometheus Terraform on-call</p>",
+      "departments": [{"name": "Engineering"}]
+    },
+    {
+      "id": 102,
+      "title": "Marketing Coordinator",
+      "absolute_url": "https://job-boards.greenhouse.io/datadog/jobs/102",
+      "location": {"name": "Mumbai"},
+      "content": "<p>Social media campaigns</p>",
+      "departments": [{"name": "Marketing"}]
+    }
+  ]
+}

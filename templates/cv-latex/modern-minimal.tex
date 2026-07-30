@@ -1,0 +1,34 @@
+% Modern Minimal — no rules anywhere; whitespace does the separating.
+%
+% Sections are told apart by the space above them, so this design needs the
+% roomier end of the density ladder to read as intended. The fit search will
+% still tighten it to hold a page target — the hierarchy survives, because
+% section spacing and bullet spacing shrink at different rates.
+{{PREAMBLE}}
+
+% ── Look ─────────────────────────────────────────────────────────────────
+\definecolor{cvaccent}{HTML}{1F2937}
+\definecolor{cvmuted}{HTML}{6B7280}
+
+\renewcommand{\cvsectionfont}[1]{{\large\bfseries\color{cvaccent} #1}}
+\renewcommand{\cvsectionrule}{\vspace{1pt}}
+\renewcommand{\cvdatefont}[1]{{\small\color{cvmuted} #1}}
+
+\renewcommand{\cvheader}[2]{%
+  {\fontsize{26}{29}\selectfont\bfseries\color{cvaccent} #1}\par\vspace{5pt}%
+  {\small\color{cvmuted} #2}\par\vspace{4pt}%
+}
+
+\begin{document}
+
+\cvheader{ {{NAME}} }{ {{CONTACT}} }
+
+{{SUMMARY}}
+{{SKILLS}}
+{{EXPERIENCE}}
+{{PROJECTS}}
+{{EDUCATION}}
+{{CERTIFICATIONS}}
+{{ADDITIONAL}}
+
+\end{document}

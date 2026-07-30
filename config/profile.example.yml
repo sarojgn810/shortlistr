@@ -1,0 +1,171 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# shortlistr — User Profile
+# Copy this file to config/profile.yml and fill in your details.
+# Run `python setup.py` to do this interactively.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Who you are ───────────────────────────────────────────────────────────────
+candidate:
+  name: "Jane Smith"
+  email: "jane@example.com"
+  phone: "+1 555 000 0000"
+  location: "San Francisco, CA"          # City you're based in
+  linkedin: "https://linkedin.com/in/janesmith"
+  github: "https://github.com/janesmith"
+  years_exp: 5
+
+# ── Where your files live (repo root — same paths as Node/AI layer) ───────────
+files:
+  resume_pdf: "resume.pdf"              # your PDF filename at repo root
+  cv_markdown: "cv.md"                   # canonical CV for /shortlistr evaluation
+
+# ── Job search filters ────────────────────────────────────────────────────────
+filters:
+  # Work mode (workplace type): remote | hybrid | onsite | any
+  work_mode: "remote"
+  # Region (geographic scope): anywhere | india
+  region: "anywhere"
+  remote_strict: true                   # only applies when work_mode=remote: skip jobs not explicitly Remote/WFH
+
+  # Salary floor — jobs below this are flagged / skipped
+  min_salary_inr_lpa: 0                 # e.g. 35 (for ₹35L/yr). Set 0 to disable.
+  min_salary_usd: 0                     # e.g. 80000 (for $80k/yr). Set 0 to disable.
+  salary_unlisted: "include"            # include | skip — what to do when salary not listed
+
+  # Job titles to target (case-insensitive substring match).
+  # List one spelling per role — known families are expanded automatically
+  # (MLOps also matches "ML Ops" / "Machine Learning Operations", SRE matches
+  # "Site Reliability Engineer", …). List *distinct roles* rather than seniority
+  # variants: sources search one term per role, so "Senior X" and "Principal X"
+  # add nothing, while adding a second role gets that role searched too.
+  target_titles:
+    - "Software Engineer"
+    - "Backend Engineer"
+    - "Full Stack Engineer"
+    - "Cloud Engineer"
+    - "Infrastructure Engineer"
+
+  # Words in job title that immediately disqualify — e.g. "junior", "intern"
+  deal_breakers: []
+
+# ── LLM configuration ─────────────────────────────────────────────────────────
+# shortlistr uses an LLM (if configured) for:
+#   - Personalized cover letters
+#   - Job evaluation & scoring
+#   - Interview prep generation
+#
+# Leave provider blank or set to "none" to use template-based fallbacks.
+#
+# Supported providers:
+#   auto      → Prefer Local AI (tiny Ollama model), else cloud key, else templates
+#   anthropic → Anthropic API (see provider docs for model names)
+#   openai    → OpenAI GPT (gpt-4o recommended)
+#   gemini    → Google Gemini (gemini-1.5-pro recommended)
+#   ollama    → Local Ollama (no API key needed)
+#   none      → No LLM; use templates only
+
+llm:
+  provider: "auto"                      # auto | anthropic | openai | gemini | ollama | none
+  model: "qwen2.5:0.5b"                 # Local default; leave blank for cloud defaults
+  # API key — prefer setting via .env: SHORTLISTR_LLM_API_KEY=...
+  # Only set here if you don't use .env
+  api_key: ""
+  # For Ollama / Local AI — base URL of your local Ollama server
+  ollama_url: "http://localhost:11434"
+
+# ── Email settings ────────────────────────────────────────────────────────────
+email:
+  smtp_host: "smtp.gmail.com"
+  smtp_port: 587
+  sender: "jane@example.com"
+  # Use a Gmail App Password (not your regular password)
+  # Set via .env: SHORTLISTR_EMAIL_PASSWORD=...
+  max_per_run: 10                       # Safety cap — max emails sent per daily run
+
+# ── Platform credentials ──────────────────────────────────────────────────────
+# Set passwords via .env — never hardcode here
+platforms:
+  linkedin:
+    email: "jane@example.com"
+    # password via .env: SHORTLISTR_LINKEDIN_PASSWORD=...
+  naukri:
+    email: "jane@example.com"
+    # password via .env: SHORTLISTR_NAUKRI_PASSWORD=...
+
+# ── Application Auto-Fill (apply-assist / Chromium) ───────────────────────────
+# Answers pasted into common ATS custom questions. Never auto-submitted.
+application:
+  website: ""                           # Portfolio / personal site
+  notice_period: ""                     # e.g. "30 days" / "Immediate"
+  current_ctc: ""                       # e.g. "40 LPA"
+  expected_ctc: ""                      # e.g. "55 LPA"
+  how_heard: ""                         # LinkedIn / Referral / Company site
+  work_authorization: ""                # e.g. "Authorized to work in India; no sponsorship needed"
+  preferred_name: ""                    # What you go by (if different from legal name)
+  cover_letter_snippet: ""              # Short “why this role” pasted into textareas
+  willing_to_relocate: ""               # Yes / No / Open to discussion
+
+# ── Scoring ───────────────────────────────────────────────────────────────────
+scoring:
+  min_fit_score: 40                     # 0–100. Jobs below this are skipped.
+  # Raise to 55+ for stricter targeting, lower to 30 for broader search
+
+# ── Discovery (hybrid job search) ─────────────────────────────────────────────
+# You do NOT need every company in portals.yml. Use:
+#   - target_titles above → keyword filter for aggregators (Himalayas, RemoteOK, etc.)
+#   - portals.yml search_queries → cross-company Greenhouse/Ashby/Lever discovery
+#   - tracked_companies → optional watchlist for employers you always want checked
+discovery:
+  mode: hybrid                          # hybrid | watchlist_only
+  search_queries: true                  # run portals.yml search_queries in daily scan
+  resolve_pipeline_urls: true           # fetch ATS jobs from pending pipeline URLs
+
+# ── Source registry (Phase 1 architecture) ────────────────────────────────────
+# Default enabled: watchlist ATS + aggregators + naukri + search + url_resolver
+# LinkedIn browser scrape is opt-in. Apify (LinkedIn + Naukri cloud actors) is
+# also opt-in — add "apify" to enabled and set APIFY_TOKEN in .env (free $5 credit
+# is enough for personal searches; ~$0.20 covered 130 roles in inventory).
+sources:
+  enabled:
+    - watchlist_ats
+    - aggregators
+    - naukri
+    - search
+    - url_resolver
+    - gmail
+    # - apify                 # uncomment + set APIFY_TOKEN to enable
+  linkedin:
+    enabled: false                      # opt-in — set true to enable LinkedIn scraping
+    mode: scrape_only                   # scrape only — auto-submit was removed
+    easy_apply: false                   # ignored; never clicks Submit
+  apify:
+    # Wired: naukri, linkedin, indeed, dice, monster, seek, upwork, hackernews,
+    #        naukrigulf, glassdoor, ziprecruiter
+    # Skip (use local watchlist_ats / aggregators): greenhouse, lever, ashby,
+    #        remotive, himalayas, remoteok
+    # Later: workday (needs per-company boardUrl)
+    boards:
+      - naukri
+      - linkedin
+      - indeed
+    # Optional extras (burn credit / some are rental actors):
+    # - dice
+    # - monster          # rental
+    # - seek
+    # - upwork
+    # - hackernews
+    # - naukrigulf
+    # - glassdoor        # rental
+    # - ziprecruiter     # rental
+    naukri_actor: "valig/naukri-jobs-scraper"
+    linkedin_actor: "valig/linkedin-jobs-scraper"
+    indeed_actor: "valig/indeed-jobs-scraper"
+    limit: 40
+    max_pairs: 1
+    timeout_secs: 180
+  disabled_legacy:                      # legacy scrapers off by default (403/404 prone)
+    - glassdoor
+    - simplyhired
+    - skipthedrive
+    - remoteco
+
