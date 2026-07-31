@@ -547,69 +547,98 @@ export function CvWorkspace({
       )}
 
       {tab === "templates" && (
-        <div className="grid gap-6 lg:grid-cols-5">
-          <div className="space-y-3 lg:col-span-2">
+        <div className="flex flex-col gap-5 lg:grid lg:grid-cols-5 lg:items-start lg:gap-6">
+          {/* Preview first in the DOM so mobile users see it above the list;
+              sticky on desktop so browsing the last templates never scrolls it away. */}
+          <div className="order-1 lg:order-2 lg:col-span-3">
+            <div
+              id="cv-template-preview"
+              className="sticky top-3 z-10 space-y-3 rounded-2xl border border-mist bg-sage/30 p-3 sm:p-4 lg:top-4"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-bold text-ink">
+                    Live preview · {activeTemplate?.name || "Template"}
+                  </p>
+                  <p className="text-xs text-stone">
+                    {activeTemplate?.recommended ? "Recommended · " : ""}
+                    {activeTemplate?.description || "Select a design on the left"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openTemplatePreview(templateId)}
+                    disabled={!templateId}
+                  >
+                    <Eye size={14} />
+                    Enlarge
+                  </Button>
+                  <Button
+                    variant="lime"
+                    size="sm"
+                    onClick={() => void handleGenerate(templateId)}
+                    isLoading={generating}
+                    disabled={!templateId}
+                  >
+                    Use & generate
+                  </Button>
+                </div>
+              </div>
+              <CvHtmlPreview
+                html={previewHtml}
+                loading={previewLoading}
+                allowMultiPage={pageTarget !== "1"}
+                emptyMessage="Pick a Shortlistr template to preview your resume."
+              />
+              {activeTemplate?.ats_notes && (
+                <p className="text-xs text-stone">{activeTemplate.ats_notes}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="order-2 space-y-3 lg:order-1 lg:col-span-2">
             <p className="text-sm text-stone">
-              All Shortlistr templates are single-column and ATS-safe. Recommended picks are tuned for
-              most tech applications.
+              All designs are single-column and ATS-safe. Scroll the list — the preview stays put.
             </p>
-            {sortedTemplates.map((t) => {
-              const selected = templateId === t.id;
-              return (
-                <div
-                  key={t.id}
-                  className={`rounded-2xl border p-4 transition ${
-                    selected ? "border-lime bg-lime/10 ring-1 ring-lime/30" : "border-mist bg-white"
-                  }`}
-                >
+            <div className="max-h-[min(58vh,560px)] space-y-2 overflow-y-auto overscroll-contain rounded-2xl border border-mist bg-white/60 p-2 lg:max-h-[min(72vh,780px)]">
+              {sortedTemplates.map((t) => {
+                const selected = templateId === t.id;
+                return (
                   <button
+                    key={t.id}
                     type="button"
-                    className="w-full text-left"
+                    className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
+                      selected
+                        ? "border-lime bg-lime/10 ring-1 ring-lime/30"
+                        : "border-transparent bg-white hover:border-mist hover:bg-mist/40"
+                    }`}
                     onClick={() => {
                       setTemplateId(t.id);
                       void loadPreview(t.id);
+                      // On small screens the preview sits above; nudge into view after pick.
+                      if (typeof window !== "undefined" && window.innerWidth < 1024) {
+                        document
+                          .getElementById("cv-template-preview")
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }
                     }}
                   >
                     <div className="flex items-center gap-2">
-                      <p className="font-bold text-ink">{t.name}</p>
+                      <p className="min-w-0 flex-1 truncate font-bold text-ink">{t.name}</p>
                       {t.recommended && (
-                        <span className="rounded-full bg-ink px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
-                          Recommended
+                        <span className="shrink-0 rounded-full bg-ink px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                          Rec
                         </span>
                       )}
-                      {selected && <Check size={16} className="ml-auto text-lime-ink" />}
+                      {selected && <Check size={16} className="shrink-0 text-lime-ink" />}
                     </div>
-                    <p className="mt-1 text-sm text-stone">{t.description}</p>
-                    <p className="mt-2 text-xs text-stone/80">{t.ats_notes}</p>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-stone">{t.description}</p>
                   </button>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => openTemplatePreview(t.id)}>
-                      <Eye size={14} />
-                      Enlarge
-                    </Button>
-                    <Button
-                      variant={selected ? "lime" : "secondary"}
-                      size="sm"
-                      onClick={() => void handleGenerate(t.id)}
-                      isLoading={generating && templateId === t.id}
-                    >
-                      Use & generate
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="lg:col-span-3">
-            <p className="mb-2 text-sm font-bold text-stone">
-              Live preview · {activeTemplate?.name || "Template"}
-            </p>
-            <CvHtmlPreview
-              html={previewHtml}
-              loading={previewLoading}
-              allowMultiPage={pageTarget !== "1"}
-              emptyMessage="Pick a Shortlistr template to preview your resume."
-            />
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
