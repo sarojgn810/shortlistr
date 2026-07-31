@@ -875,6 +875,7 @@ def create_app():
         user: dict = Depends(_auth),
     ):
         from apply.ats_fill import apply_assist_for_job
+        from apply.channels import NotFillableError
         from store.status import StatusError, validate_job_id
 
         if not body.confirm:
@@ -898,6 +899,8 @@ def create_app():
                     "No application fields were filled — open the posting manually or run: make resolve-jobs",
                 )
             return report
+        except NotFillableError as e:
+            raise HTTPException(422, str(e))
         except StatusError as e:
             raise HTTPException(400, str(e))
         except ValueError as e:

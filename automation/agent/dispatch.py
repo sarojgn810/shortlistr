@@ -67,7 +67,24 @@ def _evaluate(args: dict) -> dict:
         return {"error": "job not found"}
     jd, company, role, url = prepare_job_for_eval(dict(row))
     r = evaluate_job_text(jd, url=url, company=company or "", role=role or "")
-    return {"score": r.score, "legitimacy": r.legitimacy, "eval_mode": r.eval_mode}
+    out = {"score": r.score, "legitimacy": r.legitimacy, "eval_mode": r.eval_mode}
+    # Phone ping for strong matches when Telegram is linked + bot is running.
+    try:
+        if r.score is not None and float(r.score) >= 3.5:
+            from connectors.telegram import notify_job
+
+            notify_job(
+                {
+                    "id": args["job_id"],
+                    "company": company,
+                    "title": role,
+                    "score": r.score,
+                    "url": url,
+                }
+            )
+    except Exception:
+        pass
+    return out
 
 
 def _explain(args: dict) -> dict:
@@ -80,6 +97,34 @@ def _queue_apply(args: dict) -> dict:
     from store.status import mark_approved
 
     return mark_approved(args["job_id"], actor="chat")
+
+
+def _skip(args: dict) -> dict:
+    from store.status import mark_skipped
+
+    return mark_skipped(args["job_id"], actor="chat")
+
+
+def _whoami(args: dict) -> dict:
+    from agent.user_context import profile_snapshot
+
+    return profile_snapshot()
+
+
+def _prep(args: dict) -> dict:
+    from api.prep_bundle import generate_prep_bundle
+
+    bundle = generate_prep_bundle(args["job_id"])
+    return {
+        "job_id": bundle.get("job_id"),
+        "company": bundle.get("company"),
+        "role": bundle.get("role"),
+        "url": bundle.get("url"),
+        "apply_channel": bundle.get("apply_channel"),
+        "has_cover": bool((bundle.get("cover_letter") or {}).get("body")),
+        "has_prep_guide": bool(bundle.get("prep_content") or bundle.get("prep_path")),
+        "cv_pdf_path": bundle.get("cv_pdf_path"),
+    }
 
 
 def _apply_assist(args: dict) -> dict:
@@ -106,6 +151,9 @@ _BUILTIN_HANDLERS = {
     "shortlistr.evaluate": _evaluate,
     "shortlistr.explain": _explain,
     "shortlistr.queue_apply": _queue_apply,
+    "shortlistr.skip": _skip,
+    "shortlistr.whoami": _whoami,
+    "shortlistr.prep": _prep,
     "shortlistr.apply_assist": _apply_assist,
     "shortlistr.resolve_jobs": _resolve_jobs,
 }

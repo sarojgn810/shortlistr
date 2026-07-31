@@ -50,11 +50,15 @@ def get_prep_bundle(job_id: str, *, generate: bool = False) -> dict[str, Any]:
         job_row = dict(row)
 
     job = _job_dict(job_row)
+    from api.jobs_api import apply_channel_for
+
     bundle: dict[str, Any] = {
         "job_id": jid,
         "company": job["company"],
         "role": job["title"],
         "url": job["url"],
+        "source": job_row.get("source") or "",
+        "apply_channel": apply_channel_for(job_row),
     }
 
     try:

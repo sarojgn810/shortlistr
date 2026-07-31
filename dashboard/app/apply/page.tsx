@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import DashboardShell from "@/src/components/layout/DashboardShell";
 import { Button } from "@/src/components/ui/Button";
 import { api, ApiError } from "@/src/lib/api/client";
+import { resolveApplyChannel } from "@/src/lib/applyChannel";
 
 export default function ApplyRunnerPage() {
   const router = useRouter();
@@ -33,7 +34,15 @@ export default function ApplyRunnerPage() {
 
   const [coverBody, setCoverBody] = useState("");
   const currentId = queue[idx];
-  const channel = (job?.apply_channel as string) || "form";
+  const channel = resolveApplyChannel(
+    job
+      ? {
+          apply_channel: job.apply_channel as string | undefined,
+          url: job.url as string | undefined,
+          source: job.source as string | undefined,
+        }
+      : null
+  );
 
   useEffect(() => {
     if (!currentId) return;
@@ -127,7 +136,13 @@ export default function ApplyRunnerPage() {
             <div className="mt-2 flex items-center gap-2">
               <h2 className="text-xl font-bold text-ink">{(job?.title as string) || "Role"}</h2>
               <span className="rounded-full bg-mist px-2.5 py-1 text-xs font-bold uppercase tracking-widest text-stone">
-                {channel === "email" ? "Email" : channel === "form" ? "Form" : "Manual"}
+                {channel === "email"
+                  ? "Email"
+                  : channel === "form"
+                    ? "Form"
+                    : channel === "link"
+                      ? "Apply on site"
+                      : "Manual"}
               </span>
             </div>
             <p className="text-base text-stone">{(job?.company as string) || "Company"}</p>
@@ -157,20 +172,23 @@ export default function ApplyRunnerPage() {
             ) : (
               <>
                 <p className="mt-3 text-base text-stone">
-                  Prefill opens a browser and fills what it can — you still review, attach your CV if
-                  needed, and click Submit yourself. Nothing is submitted automatically.
+                  {channel === "link"
+                    ? "This posting is on a job board (LinkedIn, Naukri and similar) — it has no form to pre-fill. Open it and apply on the site, then mark it here."
+                    : "Prefill opens a browser and fills what it can — you still review, attach your CV if needed, and click Submit yourself. Nothing is submitted automatically."}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <Button variant="lime" isLoading={busy} onClick={prefill}>
-                    Prefill form
-                  </Button>
+                  {channel !== "link" && (
+                    <Button variant="lime" isLoading={busy} onClick={prefill}>
+                      Prefill form
+                    </Button>
+                  )}
                   {typeof job?.url === "string" && (
                     <a
                       href={job.url as string}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      <Button variant="secondary">
+                      <Button variant={channel === "link" ? "lime" : "secondary"}>
                         Open posting ↗
                       </Button>
                     </a>

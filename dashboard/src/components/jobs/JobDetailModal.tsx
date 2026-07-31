@@ -14,6 +14,7 @@ import type {
   ApplicationReceipt,
 } from "@/src/types/job";
 import { plainJobDescription } from "@/src/lib/text";
+import { isLinkOnlyJob } from "@/src/lib/applyChannel";
 
 const BLOCK_LABELS: Record<string, string> = {
   A: "Role summary",
@@ -234,18 +235,22 @@ export default function JobDetailModal({
 
           {diff && !(evalResult?.template_only || job?.eval_template_only) && (
             <div>
-              <h3 className="mb-2 text-sm font-bold text-stone">
-                Résumé prep ({diff.change_count} change{diff.change_count === 1 ? "" : "s"})
-              </h3>
-              {diff.diff.length > 0 ? (
-                <pre className="max-h-40 overflow-y-auto rounded-2xl border border-mist bg-black/5 p-4 font-mono text-sm text-ink">
-                  {diff.diff.slice(0, 40).join("\n")}
-                </pre>
-              ) : (
-                <p className="text-sm text-stone">
-                  {diff.tailored_preview?.slice(0, 300) || "Baseline CV matches tailored header for this role."}
-                </p>
-              )}
+              <h3 className="mb-2 text-sm font-bold text-stone">Résumé prep</h3>
+              <p className="text-sm text-ink">
+                {diff.summary ||
+                  (diff.same_as_baseline
+                    ? "Same content as your baseline résumé."
+                    : `${diff.change_count} change${diff.change_count === 1 ? "" : "s"}`)}
+              </p>
+              {(diff.highlights?.length || diff.diff?.length) ? (
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-stone">
+                  {(diff.highlights?.length ? diff.highlights : diff.diff)
+                    .slice(0, 6)
+                    .map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                </ul>
+              ) : null}
             </div>
           )}
 
@@ -313,6 +318,7 @@ export default function JobDetailModal({
             </Button>
           )}
           {onApplyAssist &&
+            !isLinkOnlyJob(job) &&
             (job?.pipeline_status === "approved" || job?.pipeline_status === "evaluated") && (
               <Button variant="secondary" onClick={onApplyAssist} isLoading={isApplyAssisting}>
                 Fill form
@@ -330,7 +336,7 @@ export default function JobDetailModal({
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center gap-2 rounded-2xl border border-mist bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-all hover:bg-sage/50 active:scale-95"
             >
-              Open <ExternalLink size={14} />
+              {isLinkOnlyJob(job) ? "Open posting" : "Open"} <ExternalLink size={14} />
             </a>
           )}
         </div>

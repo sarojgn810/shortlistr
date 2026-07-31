@@ -74,6 +74,8 @@ function mergeJobs(prev: Job[], incoming: Job[]): Job[] {
       old.eval_score === next.eval_score &&
       old.legitimacy === next.legitimacy &&
       old.eval_template_only === next.eval_template_only &&
+      old.apply_channel === next.apply_channel &&
+      old.url === next.url &&
       (old.skills || []).join("|") === (next.skills || []).join("|");
     return same ? old : next;
   });

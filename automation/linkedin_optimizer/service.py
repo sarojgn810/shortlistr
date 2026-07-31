@@ -12,11 +12,43 @@ from linkedin_optimizer.from_cv import profile_from_cv_markdown
 from linkedin_optimizer.import_profile import fetch_public_profile, normalize_linkedin_url
 from linkedin_optimizer.parser import parse_profile_text, profile_from_structured
 from linkedin_optimizer.rewriter import maybe_llm_polish, rewrite_section
-from linkedin_optimizer.roles import get_role, list_roles
+from linkedin_optimizer.roles import detect_role_id, get_role, list_roles, role_from_profile
 from linkedin_optimizer.scorer import score_profile
 from linkedin_optimizer.from_cv import corpus_text
 
 DRAFT_PATH = os.path.join(DATA_DIR, "linkedin_optimizer.json")
+
+
+def _owner_key() -> str:
+    """Identity stamp so a draft from another machine/profile is not reused."""
+    try:
+        from config import CANDIDATE
+
+        email = str(CANDIDATE.get("email") or "").strip().lower()
+        name = str(CANDIDATE.get("name") or "").strip().lower()
+        return email or name
+    except Exception:
+        return ""
+
+
+def _is_stale_draft(data: dict[str, Any]) -> bool:
+    current = _owner_key()
+    if not current:
+        return False
+    saved = str(data.get("owner") or "").strip().lower()
+    if saved and saved != current:
+        return True
+    if not saved:
+        pname = str((data.get("profile") or {}).get("name") or "").strip().lower()
+        try:
+            from config import CANDIDATE
+
+            cname = str(CANDIDATE.get("name") or "").strip().lower()
+        except Exception:
+            cname = ""
+        if pname and cname and pname != cname:
+            return True
+    return False
 
 
 def _load_draft() -> dict[str, Any]:
@@ -25,32 +57,33 @@ def _load_draft() -> dict[str, Any]:
     try:
         with open(DRAFT_PATH, encoding="utf-8") as f:
             data = json.load(f)
-        return data if isinstance(data, dict) else {}
+        if not isinstance(data, dict):
+            return {}
+        if _is_stale_draft(data):
+            return {}
+        return data
     except Exception:
         return {}
 
 
 def _save_draft(data: dict[str, Any]) -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
+    payload = dict(data)
+    owner = _owner_key()
+    if owner:
+        payload["owner"] = owner
     with open(DRAFT_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+        json.dump(payload, f, indent=2, ensure_ascii=False)
 
 
-def _detect_role(titles: list[str] | None, fallback: str = "sre") -> str:
-    if not titles:
-        return fallback
-    t0 = str(titles[0]).lower()
-    if "sre" in t0 or "reliability" in t0:
-        return "sre"
-    if "devops" in t0:
-        return "devops"
-    if "full" in t0 and "stack" in t0:
-        return "fullstack"
-    if "ml" in t0 or "ai" in t0:
-        return "ai_engineer"
-    if "backend" in t0:
-        return "backend"
-    return fallback
+def _resolve_role(explicit: str | None = None, *hints: str) -> str:
+    """Prefer an explicit UI choice; else hints; else live profile.yml titles."""
+    if (explicit or "").strip():
+        return get_role(explicit)["id"]
+    hint_bits = [h for h in hints if (h or "").strip()]
+    if hint_bits:
+        return detect_role_id(*hint_bits)
+    return role_from_profile()
 
 
 def _profile_linkedin_url() -> str:
@@ -111,9 +144,10 @@ def import_from_cv(*, target_role: str | None = None, persist: bool = True) -> d
             "error": "Résumé did not yield enough profile text. Paste your LinkedIn sections.",
             "profile": profile,
         }
-    role_id = target_role or _detect_role(
-        [profile.get("headline") or ""]
-        + [j.get("title") or "" for j in profile.get("experience") or []],
+    role_id = _resolve_role(
+        target_role,
+        profile.get("headline") or "",
+        *[j.get("title") or "" for j in profile.get("experience") or []],
     )
     # Prefer URL from CV/profile
     url = profile.get("linkedin_url") or resolve_linkedin_url()
@@ -131,7 +165,7 @@ def import_from_cv(*, target_role: str | None = None, persist: bool = True) -> d
 
 
 def import_from_url(
-    url: str | None = None, *, target_role: str = "sre", persist: bool = True
+    url: str | None = None, *, target_role: str | None = None, persist: bool = True
 ) -> dict[str, Any]:
     resolved = resolve_linkedin_url(url)
     if not resolved:
@@ -156,7 +190,12 @@ def import_from_url(
             "via": fetched.get("via"),
         }
     profile = fetched["profile"]
-    out = analyze(profile=profile, target_role=target_role or "sre", persist=persist)
+    role_id = _resolve_role(
+        target_role,
+        profile.get("headline") or "",
+        *[j.get("title") or "" for j in profile.get("experience") or []],
+    )
+    out = analyze(profile=profile, target_role=role_id, persist=persist)
     out["ok"] = True
     out["source"] = "linkedin"
     out["linkedin_url"] = resolved
@@ -170,7 +209,7 @@ def analyze(
     *,
     text: str | None = None,
     profile: dict[str, Any] | None = None,
-    target_role: str = "sre",
+    target_role: str | None = None,
     persist: bool = True,
     linkedin_url: str | None = None,
 ) -> dict[str, Any]:
@@ -186,8 +225,13 @@ def analyze(
     url = normalize_linkedin_url(linkedin_url or "") or parsed.get("linkedin_url") or resolve_linkedin_url()
     if url:
         parsed["linkedin_url"] = url
-    score = score_profile(parsed, target_role)
-    role = get_role(target_role)
+    role_id = _resolve_role(
+        target_role,
+        parsed.get("headline") or "",
+        *[j.get("title") or "" for j in parsed.get("experience") or []],
+    )
+    score = score_profile(parsed, role_id)
+    role = get_role(role_id)
     out = {
         "profile": parsed,
         "score": score,
@@ -215,21 +259,25 @@ def rewrite(
     *,
     section: str,
     profile: dict[str, Any] | None = None,
-    target_role: str = "sre",
+    target_role: str | None = None,
     use_llm: bool = False,
 ) -> dict[str, Any]:
     if profile:
         parsed = profile_from_structured(profile)
+        role_id = _resolve_role(target_role, parsed.get("headline") or "")
     else:
         draft = _load_draft()
         parsed = draft.get("profile") or profile_from_structured({})
-        target_role = draft.get("target_role") or target_role
+        role_id = _resolve_role(
+            target_role or draft.get("target_role"),
+            parsed.get("headline") or "",
+        )
 
-    result = rewrite_section(section, parsed, target_role)
+    result = rewrite_section(section, parsed, role_id)
     mode = result.get("mode") or "heuristic"
     if use_llm and result.get("suggested"):
         polished, mode = maybe_llm_polish(
-            result["suggested"], section, target_role, evidence=corpus_text(parsed)
+            result["suggested"], section, role_id, evidence=corpus_text(parsed)
         )
         result["suggested"] = polished
         result["mode"] = mode
@@ -240,25 +288,27 @@ def rewrite(
 def rewrite_all(
     *,
     profile: dict[str, Any] | None = None,
-    target_role: str = "sre",
+    target_role: str | None = None,
     use_llm: bool = False,
 ) -> dict[str, Any]:
     sections = ["headline", "about", "experience", "skills", "open_to_work", "featured"]
     out = {}
+    role_id = _resolve_role(target_role)
     for s in sections:
-        out[s] = rewrite(section=s, profile=profile, target_role=target_role, use_llm=use_llm)
-    return {"sections": out, "target_role": get_role(target_role)["id"]}
+        out[s] = rewrite(section=s, profile=profile, target_role=role_id, use_llm=use_llm)
+    return {"sections": out, "target_role": get_role(role_id)["id"]}
 
 
 def get_state() -> dict[str, Any]:
     draft = _load_draft()
     profile = draft.get("profile")
     url = draft.get("linkedin_url") or resolve_linkedin_url()
-    role_id = draft.get("target_role") or "sre"
+    # Draft role only counts when it belongs to this profile; else live profile.yml.
+    role_id = _resolve_role(draft.get("target_role") if draft else None)
 
     # Auto-import from CV when we have no substantial draft yet
     if not _profile_is_substantial(profile) and os.path.isfile(CV_MD_PATH):
-        imported = import_from_cv(target_role=role_id, persist=True)
+        imported = import_from_cv(target_role=None, persist=True)
         if imported.get("ok"):
             return {
                 "profile": imported["profile"],
@@ -275,6 +325,14 @@ def get_state() -> dict[str, Any]:
 
     if not profile:
         profile = profile_from_structured({})
+        # Prefer candidate name from live profile so the UI isn't blank/wrong.
+        try:
+            from config import CANDIDATE
+
+            if CANDIDATE.get("name") and not profile.get("name"):
+                profile["name"] = CANDIDATE["name"]
+        except Exception:
+            pass
     score = draft.get("score") or score_profile(profile, role_id)
     substantial = _profile_is_substantial(profile)
     return {
@@ -297,7 +355,7 @@ def get_state() -> dict[str, Any]:
     }
 
 
-def save_state(profile: dict[str, Any], target_role: str) -> dict[str, Any]:
+def save_state(profile: dict[str, Any], target_role: str | None = None) -> dict[str, Any]:
     return analyze(profile=profile, target_role=target_role, persist=True)
 
 

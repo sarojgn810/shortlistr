@@ -37,14 +37,25 @@ def _memory_block(tenant_id: str) -> str:
 
 
 def _system_prompt(tenant_id: str) -> str:
+    try:
+        from agent.user_context import context_block
+
+        identity = context_block()
+    except Exception:
+        identity = ""
+
     base = (
-        "You are shortlistr's assistant. You help the user run their job search and can call tools.\n"
+        "You are Shortlistr's assistant. You know the user's profile "
+        "and can take actions via tools — not just chat.\n"
         "Reply with EXACTLY ONE JSON object per turn, nothing else:\n"
         '  {"action":"answer","text":"..."}  — to reply to the user\n'
         '  {"action":"call_tool","tool":"<name>","args":{...}}  — to run a tool\n'
-        "Use tools to fetch facts before answering. For submit-class tools, still emit "
-        "call_tool; the system will ask the user to confirm before running them.\n"
-        "When action is answer, keep text concrete and direct — no fluff or banned filler phrases.\n\n"
+        "Use tools to fetch facts or change state before answering. For submit-class "
+        "tools, still emit call_tool; the system will ask the user to confirm.\n"
+        "Never invent employers, metrics, or skills that are not in the profile/CV "
+        "or tool observations. Never claim you submitted an application.\n"
+        "When action is answer, keep text concrete and direct.\n"
+        f"{identity}\n\n"
         f"Available tools:\n{_tool_catalog()}{_memory_block(tenant_id)}"
     )
     try:
@@ -175,16 +186,43 @@ def _fallback(message: str, tenant_id: str) -> dict:
                 "actions": [{"tool": "shortlistr.list_jobs", "result": jobs}],
             }
         if "prep" in msg:
+            # "prep <job_id>" when an id-looking token is present
+            tokens = msg.replace(",", " ").split()
+            job_id = next((t for t in tokens if len(t) >= 8 and t.isalnum()), None)
+            if job_id:
+                res = dispatch.call_tool("shortlistr.prep", {"job_id": job_id}, tenant_id=tenant_id)
+                return {
+                    "reply": f"Prep ready for {job_id}: cover letter + guide generated.",
+                    "actions": [{"tool": "shortlistr.prep", "result": res}],
+                }
             return {
-                "reply": "Open Prep in the sidebar to review cover letters and interview guides for approved roles.",
+                "reply": "Open Prep in the sidebar, or say: prep <job_id>",
                 "actions": [],
             }
+        if msg in ("whoami", "who am i", "my profile", "profile") or "who am i" in msg:
+            snap = dispatch.call_tool("shortlistr.whoami", {}, tenant_id=tenant_id)
+            name = snap.get("name") or "not set"
+            titles = ", ".join(snap.get("target_titles") or []) or "none"
+            return {
+                "reply": f"You're {name}. Targeting: {titles}.",
+                "actions": [{"tool": "shortlistr.whoami", "result": snap}],
+            }
+        if msg.startswith("approve ") or msg.startswith("skip "):
+            parts = msg.split()
+            job_id = parts[1] if len(parts) > 1 else ""
+            tool = "shortlistr.queue_apply" if parts[0] == "approve" else "shortlistr.skip"
+            if job_id:
+                res = dispatch.call_tool(tool, {"job_id": job_id}, tenant_id=tenant_id)
+                return {
+                    "reply": f"{parts[0].title()}d {job_id}.",
+                    "actions": [{"tool": tool, "result": res}],
+                }
     except Exception as e:
         return {"reply": f"Error: {e}", "actions": []}
     return {
         "reply": (
             "AI helper is not set up, so I can only run a few commands: "
-            "status, inbox, discover, pipeline, or prep.\n\n"
+            "status, inbox, discover, pipeline, whoami, approve <id>, skip <id>, or prep <id>.\n\n"
             "For full chat, open Connections and add an AI provider + key."
         ),
         "actions": [],

@@ -1,42 +1,42 @@
-"""Résumé diff — baseline cv.md vs per-job tailored overlay (J1.4)."""
+"""Résumé prep status — baseline cv.md vs what we actually send (J1.4).
+
+generate_cv renders the same cv.md through the user's Resume-page template.
+There is no per-job text rewrite, so inventing an "Applying for…" header (or
+diffing against LaTeX source) produced odd "2 changes" / 100+ TeX noise in the UI.
+This module reports readiness honestly: same content, PDF ready or not.
+"""
 
 from __future__ import annotations
 
-import difflib
 import json
 import os
-import re
-from html import unescape
 from typing import Any
 
-from config import CV_MD_PATH, OUTPUT_DIR
 from store import db as store
 from store.status import validate_job_id
 
-_TAG_RE = re.compile(r"<[^>]+>")
+
+def _cv_path() -> str:
+    import config
+
+    return config.CV_MD_PATH
 
 
 def _read_baseline() -> str:
-    if not os.path.exists(CV_MD_PATH):
+    path = _cv_path()
+    if not os.path.exists(path):
         return ""
-    return open(CV_MD_PATH, encoding="utf-8").read().strip()
-
-
-def _strip_html(html: str) -> str:
-    text = _TAG_RE.sub(" ", html)
-    text = unescape(text)
-    return re.sub(r"\s+", " ", text).strip()
+    return open(path, encoding="utf-8").read().strip()
 
 
 def build_tailored_text(job: dict) -> str:
-    """Plain-text tailored CV: baseline + role-specific header."""
+    """Text we treat as the per-job résumé — same as baseline (no fake overlay)."""
     baseline = _read_baseline()
+    if baseline:
+        return baseline
     company = job.get("company") or "Company"
     title = job.get("title") or "Role"
-    header = f"# Applying for: {title} at {company}\n"
-    if not baseline:
-        return header.strip()
-    return f"{header}\n{baseline}".strip()
+    return f"{title} at {company}".strip()
 
 
 def _job_dict_from_row(row: dict) -> dict:
@@ -46,6 +46,29 @@ def _job_dict_from_row(row: dict) -> dict:
         "url": row.get("url") or "",
         "job_id": row.get("id") or "",
     }
+
+
+def _meta(row: dict) -> dict:
+    try:
+        return json.loads(row.get("metadata_json") or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return {}
+
+
+def _artifact_paths(meta: dict) -> dict[str, str | None]:
+    html = meta.get("tailored_html_path") or meta.get("tailored_resume_html")
+    tex = meta.get("tailored_tex_path")
+    pdf = meta.get("tailored_pdf_path")
+    # Legacy bug: LaTeX path was stored under tailored_html_path.
+    if html and str(html).lower().endswith(".tex"):
+        tex = tex or html
+        html = None
+    if tex and not str(tex).lower().endswith(".tex"):
+        tex = None
+    if html and not str(html).lower().endswith((".html", ".htm")):
+        # Unknown source — don't treat as HTML body for diffs.
+        html = None
+    return {"html": html, "tex": tex, "pdf": pdf}
 
 
 def compute_diff(job_id: str) -> dict[str, Any]:
@@ -58,67 +81,80 @@ def compute_diff(job_id: str) -> dict[str, Any]:
         raise ValueError(f"Job not found: {jid}")
 
     job = _job_dict_from_row(dict(row))
+    company = job["company"] or "Company"
+    role = job["title"] or "Role"
     baseline = _read_baseline()
-    tailored = build_tailored_text(job)
+    arts = _artifact_paths(_meta(dict(row)))
 
-    # Also diff against saved HTML artifact if present
-    meta = {}
-    try:
-        meta = json.loads(row["metadata_json"] or "{}")
-    except (TypeError, json.JSONDecodeError):
-        pass
-    html_path = meta.get("tailored_html_path") or meta.get("tailored_resume_html")
-    if html_path and os.path.isfile(html_path):
-        tailored = _strip_html(open(html_path, encoding="utf-8").read())
+    highlights: list[str] = []
+    pdf_ready = bool(arts["pdf"] and os.path.isfile(arts["pdf"]))
+    html_ready = bool(arts["html"] and os.path.isfile(arts["html"]))
+    tex_ready = bool(arts["tex"] and os.path.isfile(arts["tex"]))
 
-    baseline_lines = baseline.splitlines() or [""]
-    tailored_lines = tailored.splitlines() or [""]
-
-    diff = list(
-        difflib.unified_diff(
-            baseline_lines,
-            tailored_lines,
-            fromfile="cv.md (baseline)",
-            tofile=f"tailored ({job['company']})",
-            lineterm="",
+    if not baseline:
+        summary = "No résumé on file yet — upload a résumé (cv.md) first."
+        highlights = ["Open Profile / Resume and upload your CV."]
+    elif pdf_ready:
+        summary = (
+            f"PDF ready for {role} at {company} — same content as your baseline résumé."
         )
-    )
+        highlights = [
+            "Rendered from cv.md with the template you picked on Resume.",
+            f"File: {os.path.basename(arts['pdf'] or '')}",
+        ]
+        if tex_ready:
+            highlights.append("Built with LaTeX (ATS-friendly).")
+        elif html_ready:
+            highlights.append("Built with the HTML renderer.")
+    else:
+        summary = (
+            f"Will use your baseline résumé for {role} at {company} "
+            "(no per-job text edits)."
+        )
+        highlights = [
+            "Content matches cv.md — generate Prep to produce the PDF.",
+        ]
 
-    changes = [ln for ln in diff if ln.startswith("+") and not ln.startswith("+++")]
-    removals = [ln for ln in diff if ln.startswith("-") and not ln.startswith("---")]
+    preview = baseline[:500] if baseline else ""
 
     return {
         "job_id": jid,
-        "company": job["company"],
-        "role": job["title"],
-        "change_count": len(changes) + len(removals),
-        "additions": len(changes),
-        "removals": len(removals),
-        "diff": diff,
-        "baseline_path": CV_MD_PATH if os.path.exists(CV_MD_PATH) else None,
-        "tailored_preview": tailored[:500],
+        "company": company,
+        "role": role,
+        "change_count": 0,
+        "additions": 0,
+        "removals": 0,
+        "same_as_baseline": True,
+        "pdf_ready": pdf_ready,
+        "summary": summary,
+        "highlights": highlights,
+        # Keep `diff` as human lines for older UI that joins the list.
+        "diff": highlights,
+        "baseline_path": _cv_path() if os.path.exists(_cv_path()) else None,
+        "tailored_preview": preview,
+        "pdf_path": arts["pdf"] if pdf_ready else None,
     }
 
 
 def format_diff_text(data: dict[str, Any]) -> str:
-    n = data.get("change_count", 0)
-    header = (
-        f"{data.get('change_count', 0)} change(s) · nothing sent yet\n"
-        f"{data.get('company', '?')} — {data.get('role', '?')}\n"
-        f"{'=' * 50}\n"
-    )
-    body = "\n".join(data.get("diff") or [])
-    if not body:
-        header += "No textual differences (baseline matches tailored).\n"
+    lines = [
+        data.get("summary") or f"{data.get('change_count', 0)} change(s)",
+        f"{data.get('company', '?')} — {data.get('role', '?')}",
+        "=" * 50,
+    ]
+    for h in data.get("highlights") or data.get("diff") or []:
+        lines.append(f"• {h}")
+    if not data.get("highlights") and not data.get("diff"):
+        lines.append("No textual differences (baseline matches tailored).")
         preview = data.get("tailored_preview") or ""
         if preview:
-            header += f"\nTailored preview:\n{preview[:300]}...\n"
-    else:
-        header += body + "\n"
-    return header
+            lines.append("")
+            lines.append("Preview:")
+            lines.append(preview[:300])
+    return "\n".join(lines) + "\n"
 
 
-def record_tailored_artifact(job_id: str, html_path: str, pdf_path: str | None = None) -> None:
+def record_tailored_artifact(job_id: str, source_path: str, pdf_path: str | None = None) -> None:
     """Store pointers to generated CV artifacts in job metadata."""
     jid = validate_job_id(job_id)
     store.init_db()
@@ -132,7 +168,19 @@ def record_tailored_artifact(job_id: str, html_path: str, pdf_path: str | None =
             meta = json.loads(row["metadata_json"] or "{}")
         except json.JSONDecodeError:
             meta = {}
-        meta["tailored_html_path"] = html_path
+
+        src = source_path or ""
+        lower = src.lower()
+        if lower.endswith(".tex"):
+            meta["tailored_tex_path"] = src
+            # Clear the legacy mis-filed HTML key if it pointed at this .tex
+            if str(meta.get("tailored_html_path") or "").lower().endswith(".tex"):
+                meta.pop("tailored_html_path", None)
+        elif lower.endswith((".html", ".htm")):
+            meta["tailored_html_path"] = src
+        elif src:
+            meta["tailored_source_path"] = src
+
         if pdf_path:
             meta["tailored_pdf_path"] = pdf_path
         conn.execute(

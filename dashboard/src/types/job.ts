@@ -71,6 +71,11 @@ export interface ResumeDiff {
   diff: string[];
   baseline_path?: string | null;
   tailored_preview?: string;
+  summary?: string;
+  highlights?: string[];
+  same_as_baseline?: boolean;
+  pdf_ready?: boolean;
+  pdf_path?: string | null;
 }
 
 export interface ApplicationReceipt {
@@ -94,6 +99,8 @@ export interface PrepBundle {
   company: string;
   role: string;
   url: string;
+  apply_channel?: string;
+  source?: string;
   cover_letter: CoverLetter;
   prep_path?: string | null;
   prep_content?: string | null;

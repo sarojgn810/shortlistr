@@ -383,9 +383,16 @@ def apply_assist_for_job(job_id: str, *, headless: bool = True) -> dict[str, Any
         )
 
     with store.db() as conn:
-        row = conn.execute("SELECT url, company, title FROM jobs WHERE id = ?", (jid,)).fetchone()
+        row = conn.execute(
+            "SELECT url, company, title, source FROM jobs WHERE id = ?", (jid,)
+        ).fetchone()
     if not row or not row["url"]:
         raise ValueError(f"Job {jid} has no URL")
+
+    from apply.channels import LINK_ONLY_MESSAGE, NotFillableError, is_link_only
+
+    if is_link_only(row["url"], str(row["source"] or "")):
+        raise NotFillableError(LINK_ONLY_MESSAGE)
 
     from apply.ats_strategies import resolve_resume_pdf
     from processors.generate_cv import generate_cv_for_job

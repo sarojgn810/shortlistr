@@ -93,3 +93,88 @@ def test_chat_fallback_without_llm(monkeypatch):
 
     out = chat("status")
     assert out["actions"] and out["actions"][0]["tool"] == "shortlistr.status"
+
+
+def test_system_prompt_includes_profile(monkeypatch):
+    _isolate(monkeypatch)
+    import config
+    from agent.chat import _system_prompt
+
+    monkeypatch.setattr(
+        config,
+        "CANDIDATE",
+        {
+            "name": "Ada Example",
+            "email": "ada@example.com",
+            "years_exp": "8",
+            "location": "Remote",
+            "linkedin": "",
+            "github": "",
+            "phone": "",
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(config, "_FILTERS", {"target_titles": ["SRE", "Platform"]}, raising=False)
+    monkeypatch.setattr(config, "LOCATION_KEYWORDS", ["remote"], raising=False)
+    monkeypatch.setattr(config, "_preferred_locations", lambda: ["Remote"], raising=False)
+
+    prompt = _system_prompt("default")
+    assert "Ada Example" in prompt
+    assert "SRE" in prompt
+    assert "shortlistr.whoami" in prompt
+    assert "shortlistr.skip" in prompt
+
+
+def test_whoami_and_skip_tools(monkeypatch):
+    _isolate(monkeypatch)
+    import config
+    from models.job import JobRecord, job_id_from_url
+    from store import db
+    from store.status import mark_approved
+    from agent import dispatch
+
+    db.init_db()
+    monkeypatch.setattr(
+        config,
+        "CANDIDATE",
+        {"name": "Ada", "email": "a@b.com", "years_exp": "5", "location": "", "linkedin": "", "github": "", "phone": ""},
+        raising=False,
+    )
+    monkeypatch.setattr(config, "_FILTERS", {"target_titles": ["SRE"]}, raising=False)
+    monkeypatch.setattr(config, "LOCATION_KEYWORDS", [], raising=False)
+    monkeypatch.setattr(config, "_preferred_locations", lambda: [], raising=False)
+
+    snap = dispatch.call_tool("shortlistr.whoami", {})
+    assert snap["name"] == "Ada"
+
+    url = "https://boards.greenhouse.io/acme/jobs/skip-me"
+    jid = job_id_from_url(url)
+    db.upsert_job(JobRecord(url=url, source="test", company="Acme", title="SRE", job_id=jid))
+    db.add_to_pipeline(jid, "evaluated")
+    mark_approved(jid, actor="test")
+    out = dispatch.call_tool("shortlistr.skip", {"job_id": jid})
+    assert out["pipeline_status"] == "skipped"
+
+
+def test_fallback_whoami(monkeypatch):
+    _isolate(monkeypatch)
+    import config
+    import llm
+    from store import db
+    from agent.chat import chat
+
+    db.init_db()
+    monkeypatch.setattr(llm, "get_llm", lambda: None)
+    monkeypatch.setattr(
+        config,
+        "CANDIDATE",
+        {"name": "Ada", "email": "", "years_exp": "", "location": "", "linkedin": "", "github": "", "phone": ""},
+        raising=False,
+    )
+    monkeypatch.setattr(config, "_FILTERS", {"target_titles": ["SRE"]}, raising=False)
+    monkeypatch.setattr(config, "LOCATION_KEYWORDS", [], raising=False)
+    monkeypatch.setattr(config, "_preferred_locations", lambda: [], raising=False)
+
+    out = chat("whoami")
+    assert "Ada" in out["reply"]
+    assert out["actions"][0]["tool"] == "shortlistr.whoami"

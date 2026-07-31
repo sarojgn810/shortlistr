@@ -922,14 +922,14 @@ export default function ConnectionsPage() {
         <ConnectorSection
           icon={MessageSquare}
           title="Phone alerts"
-          subtitle="Optional. Get approve / skip prompts on Telegram."
+          subtitle="Optional. Chat with the same job-search agent from your phone."
           defaultOpen={false}
         >
           <ConnectorRow
             name="Telegram"
-            note="A free chat bot that can ask you about jobs from your phone."
+            note="Same agent as the dashboard assistant — status, approve, skip, prep. After you message the bot once, strong evaluations can ping this chat."
             kind={conn?.telegram.token_set ? "active" : "optional"}
-            label={conn?.telegram.token_set ? "Connected" : "Optional"}
+            label={conn?.telegram.token_set ? "Token saved" : "Optional"}
           >
             <div className={formCls}>
               <HelpDetails title="How do I get a bot token?">
@@ -937,6 +937,8 @@ export default function ConnectionsPage() {
                   <li>Open Telegram and search for <strong className="text-ink">@BotFather</strong>.</li>
                   <li>Send <code className="text-ink">/newbot</code> and follow the prompts.</li>
                   <li>Copy the long token BotFather gives you and paste it below.</li>
+                  <li>Save, then in a terminal run <code className="text-ink">make telegram</code> and leave it running.</li>
+                  <li>Open your bot in Telegram and send <code className="text-ink">/start</code>.</li>
                 </ol>
               </HelpDetails>
               <Field label="Bot token">

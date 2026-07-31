@@ -15,26 +15,26 @@ except ImportError:  # pragma: no cover
 class LinkedInAnalyzeBody(BaseModel):
     text: Optional[str] = None
     profile: Optional[dict[str, Any]] = None
-    target_role: str = "sre"
+    target_role: Optional[str] = None
     linkedin_url: Optional[str] = None
 
 
 class LinkedInRewriteBody(BaseModel):
     section: str
     profile: Optional[dict[str, Any]] = None
-    target_role: str = "sre"
+    target_role: Optional[str] = None
     use_llm: bool = False
 
 
 class LinkedInRewriteAllBody(BaseModel):
     profile: Optional[dict[str, Any]] = None
-    target_role: str = "sre"
+    target_role: Optional[str] = None
     use_llm: bool = False
 
 
 class LinkedInSaveBody(BaseModel):
     profile: dict[str, Any]
-    target_role: str = "sre"
+    target_role: Optional[str] = None
 
 
 class LinkedInCoverBody(BaseModel):
@@ -46,7 +46,7 @@ class LinkedInCoverBody(BaseModel):
 
 class LinkedInImportUrlBody(BaseModel):
     url: Optional[str] = None
-    target_role: str = "sre"
+    target_role: Optional[str] = None
 
 
 class LinkedInImportCvBody(BaseModel):
@@ -75,7 +75,7 @@ def register_linkedin_optimizer_routes(app, *, auth_dep) -> None:
         return analyze(
             text=body.text,
             profile=body.profile,
-            target_role=body.target_role or "sre",
+            target_role=body.target_role,
             linkedin_url=body.linkedin_url,
         )
 
@@ -92,7 +92,7 @@ def register_linkedin_optimizer_routes(app, *, auth_dep) -> None:
     def linkedin_import_url(body: LinkedInImportUrlBody, user: dict = auth_dep):
         from linkedin_optimizer import import_from_url
 
-        out = import_from_url(body.url, target_role=body.target_role or "sre")
+        out = import_from_url(body.url, target_role=body.target_role)
         # 400 only when URL missing; login-wall returns 200 with ok=false so UI can offer CV
         if out.get("needs_url"):
             raise HTTPException(400, out.get("error") or "LinkedIn URL required")
@@ -105,7 +105,7 @@ def register_linkedin_optimizer_routes(app, *, auth_dep) -> None:
         return rewrite(
             section=body.section,
             profile=body.profile,
-            target_role=body.target_role or "sre",
+            target_role=body.target_role,
             use_llm=bool(body.use_llm),
         )
 
@@ -115,7 +115,7 @@ def register_linkedin_optimizer_routes(app, *, auth_dep) -> None:
 
         return rewrite_all(
             profile=body.profile,
-            target_role=body.target_role or "sre",
+            target_role=body.target_role,
             use_llm=bool(body.use_llm),
         )
 
@@ -123,7 +123,7 @@ def register_linkedin_optimizer_routes(app, *, auth_dep) -> None:
     def linkedin_save(body: LinkedInSaveBody, user: dict = auth_dep):
         from linkedin_optimizer import save_state
 
-        return save_state(body.profile, body.target_role or "sre")
+        return save_state(body.profile, body.target_role)
 
     @app.get("/linkedin/optimizer/cover/themes")
     def linkedin_cover_themes(user: dict = auth_dep):

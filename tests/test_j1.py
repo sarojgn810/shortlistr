@@ -267,7 +267,7 @@ def test_explain_combines_fit_and_eval(isolated_data_dir):
     assert "Why matched" in text
 
 
-def test_diff_detects_tailored_header(isolated_data_dir, monkeypatch):
+def test_diff_reports_same_baseline(isolated_data_dir, monkeypatch):
     from prep.diff import build_tailored_text, compute_diff, format_diff_text
     import config
 
@@ -278,12 +278,55 @@ def test_diff_detects_tailored_header(isolated_data_dir, monkeypatch):
     jid = _seed_job(isolated_data_dir)
     job = {"company": "Acme", "title": "SRE"}
     tailored = build_tailored_text(job)
-    assert "Applying for" in tailored
+    assert "Jane Doe" in tailored
+    assert "Applying for" not in tailored
 
     diff = compute_diff(jid)
-    assert diff["change_count"] >= 1
+    assert diff["change_count"] == 0
+    assert diff["same_as_baseline"] is True
+    assert "baseline" in (diff.get("summary") or "").lower() or "résumé" in (diff.get("summary") or "").lower()
     out = format_diff_text(diff)
-    assert "change" in out.lower()
+    assert "Acme" in out
+    assert "--- cv.md" not in out
+    assert "Applying for" not in out
+
+
+def test_diff_ignores_legacy_tex_as_html(isolated_data_dir, monkeypatch):
+    """LaTeX paths used to be stored as tailored_html_path — must not dump TeX into the UI."""
+    import json
+    from prep.diff import compute_diff, record_tailored_artifact
+    import config
+    from store import db as store
+
+    cv_path = os.path.join(isolated_data_dir, "cv.md")
+    open(cv_path, "w", encoding="utf-8").write("# Jane\n\nSRE.\n")
+    monkeypatch.setattr(config, "CV_MD_PATH", cv_path)
+
+    jid = _seed_job(isolated_data_dir)
+    tex = os.path.join(isolated_data_dir, "Acme.tex")
+    pdf = os.path.join(isolated_data_dir, "Acme.pdf")
+    open(tex, "w", encoding="utf-8").write("% LaTeX comment noise\n\\documentclass{article}\n")
+    open(pdf, "w", encoding="utf-8").write("%PDF-fake")
+
+    # Legacy mis-store
+    with store.db() as conn:
+        conn.execute(
+            "UPDATE jobs SET metadata_json = ? WHERE id = ?",
+            (json.dumps({"tailored_html_path": tex, "tailored_pdf_path": pdf}), jid),
+        )
+
+    diff = compute_diff(jid)
+    assert diff["change_count"] == 0
+    assert diff["pdf_ready"] is True
+    assert "documentclass" not in " ".join(diff.get("diff") or [])
+    assert "LaTeX" in " ".join(diff.get("highlights") or []) or "PDF ready" in (diff.get("summary") or "")
+
+    # New recorder stores .tex under tailored_tex_path
+    record_tailored_artifact(jid, tex, pdf)
+    with store.db() as conn:
+        meta = json.loads(conn.execute("SELECT metadata_json FROM jobs WHERE id = ?", (jid,)).fetchone()["metadata_json"])
+    assert meta.get("tailored_tex_path") == tex
+    assert not str(meta.get("tailored_html_path") or "").endswith(".tex")
 
 
 def test_eval_service_marks_pipeline_evaluated(isolated_data_dir, monkeypatch):

@@ -3,6 +3,7 @@
 import { MapPin, Clock, ArrowUpRight, Sparkles, Shield, Briefcase, Banknote } from "lucide-react";
 import { Badge } from "@/src/components/ui/Badge";
 import type { Job } from "@/src/types/job";
+import { resolveApplyChannel } from "@/src/lib/applyChannel";
 
 interface JobCardProps {
   job: Job;
@@ -89,13 +90,15 @@ export default function JobCard({ job, onView, selectable, selected, onToggle }:
                 Template mode
               </Badge>
             )}
-            {job.apply_channel && (
+            {(job.apply_channel || job.url || job.source) && (
               <Badge variant="default" className="gap-1">
-                {job.apply_channel === "email"
-                  ? "Email apply"
-                  : job.apply_channel === "form"
-                    ? "Form apply"
-                    : "Manual apply"}
+                {(() => {
+                  const ch = resolveApplyChannel(job);
+                  if (ch === "email") return "Email apply";
+                  if (ch === "form") return "Form apply";
+                  if (ch === "link") return "Apply on site";
+                  return "Manual apply";
+                })()}
               </Badge>
             )}
           </div>

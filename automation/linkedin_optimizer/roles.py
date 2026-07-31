@@ -188,8 +188,50 @@ def list_roles() -> list[dict]:
     ]
 
 
-def get_role(role_id: str) -> dict:
-    key = (role_id or "sre").strip().lower().replace("-", "_").replace(" ", "_")
+def detect_role_id(*texts: str, fallback: str | None = None) -> str:
+    """Map free-text titles/headlines onto a ROLE_PACKS id."""
+    blob = " ".join(str(t or "") for t in texts).lower()
+    if not blob.strip():
+        return fallback or role_from_profile()
+
+    # More specific phrases first.
+    if any(k in blob for k in ("site reliability", "reliability engineer", " sre", "sre ", "sre/", "/sre", "aiops", "platform engineer")):
+        # AIOps often sits with SRE in this product; pure ML titles go to ai_engineer below.
+        if any(k in blob for k in ("machine learning", "ml engineer", "llm", "ai engineer")) and "sre" not in blob and "reliability" not in blob:
+            return "ai_engineer"
+        return "sre"
+    if any(k in blob for k in ("mlops", "machine learning", "ml engineer", "llm", "ai engineer", "applied scientist")):
+        return "ai_engineer"
+    if "devops" in blob or "ci/cd" in blob or "cloud engineer" in blob:
+        return "devops"
+    if "full stack" in blob or "fullstack" in blob or "full-stack" in blob:
+        return "fullstack"
+    if "backend" in blob or "systems engineer" in blob:
+        return "backend"
+    return fallback or role_from_profile()
+
+
+def role_from_profile() -> str:
+    """Default LinkedIn target role from the live config/profile.yml titles."""
+    try:
+        import config
+
+        filters = getattr(config, "_FILTERS", None) or {}
+        titles = list(filters.get("target_titles") or [])
+        if not titles:
+            titles = list(getattr(config, "SEARCH_KEYWORDS", None) or [])
+        if titles:
+            return detect_role_id(*[str(t) for t in titles], fallback="sre")
+    except Exception:
+        pass
+    return "sre"
+
+
+def get_role(role_id: str | None = None) -> dict:
+    raw = (role_id or "").strip()
+    if not raw:
+        raw = role_from_profile()
+    key = raw.lower().replace("-", "_").replace(" ", "_")
     aliases = {
         "site_reliability": "sre",
         "site_reliability_engineer": "sre",
@@ -200,4 +242,8 @@ def get_role(role_id: str) -> dict:
         "full-stack": "fullstack",
     }
     key = aliases.get(key, key)
-    return ROLE_PACKS.get(key) or ROLE_PACKS["sre"]
+    if key in ROLE_PACKS:
+        return ROLE_PACKS[key]
+    # Unknown id → live profile default, then last-resort pack.
+    fallback = role_from_profile()
+    return ROLE_PACKS.get(fallback) or ROLE_PACKS["sre"]

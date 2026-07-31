@@ -14,6 +14,47 @@ Template:
 
 ---
 
+## 2026-07-31 — Résumé prep showed "2 changes" of nonsense
+**Symptom:** Job detail / Prep showed `Résumé prep (2 changes)` with a unified
+diff of `+# Applying for: …` or, after LaTeX CV gen, 100+ lines of TeX source.
+**Root cause:** `prep.diff` invented a header that is not in the real PDF, and
+`record_tailored_artifact` stored `.tex` under `tailored_html_path`, which the
+diff then "stripped as HTML" against `cv.md`.
+**Fix:** Honest readiness summary (same baseline content; PDF ready or not);
+store `.tex` as `tailored_tex_path`; UI shows summary + bullets, not raw diffs.
+**Guard:** `tests/test_j1.py::test_diff_reports_same_baseline`,
+`::test_diff_ignores_legacy_tex_as_html`.
+
+## 2026-07-31 — LinkedIn optimizer showed another laptop's target role
+**Symptom:** After setting a different `config/profile.yml` on a second machine,
+LinkedIn still defaulted to Site Reliability / the previous person's draft.
+**Root cause:** (1) Hardcoded `target_role="sre"` defaults in API/UI blocked
+auto-detect when a role string was present. (2) `data/linkedin_optimizer.json`
+draft (gitignored but often copied with the folder) was loaded without checking
+it belonged to the current candidate.
+**Fix:** Derive default role from live profile titles (`role_from_profile` /
+`detect_role_id`); treat missing/blank role as auto; stamp drafts with
+`owner` (email/name) and ignore stale drafts; stop forcing `"sre"` in the
+client import URL helper.
+**Guard:** `tests/test_linkedin_optimizer.py::test_role_from_profile_titles`,
+`::test_stale_linkedin_draft_ignored`.
+
+## 2026-07-30 — LinkedIn/Naukri jobs offered a "Prefill form" button
+**Symptom:** Postings discovered from LinkedIn and Naukri showed the form-apply
+UI (Prefill form / Fill form) on Apply, the job detail modal and Prep, even
+though those pages are login-walled ads with no fillable application form.
+**Root cause:** `apply_channel_for()` classified *any* job with a URL as
+`"form"` — it only distinguished email (has `company_email`) from manual (no
+URL). Board host was never considered.
+**Fix:** New `automation/apply/channels.py` (`is_link_only`, `NotFillableError`)
+listing aggregator/login-walled hosts; `apply_channel_for()` returns a new
+`"link"` channel for them; `apply_assist_for_job()` refuses link-only postings
+before launching a browser (422 from the endpoint); Apply / JobDetailModal /
+PrepDetailPanel show "Open posting" only, and the prep bundle now carries
+`apply_channel`.
+**Guard:** `tests/test_batch_apply.py::test_job_board_listings_are_link_only`
+and `::test_apply_assist_refuses_link_only_posting`.
+
 ## 2026-07-30 — Job cards showed 6.0/5 and blamed a missing résumé
 **Symptom:** Discover cards showed impossible scores like `6.0/5`, repeated
 `title match; title match (no résumé skills to compare)` even with a full

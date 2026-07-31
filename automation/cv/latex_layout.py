@@ -123,7 +123,7 @@ def build_preamble(
 \usepackage[hidelinks,
             pdftitle={{{_pdf_safe(pdf_title)}}},
             pdfauthor={{{_pdf_safe(pdf_author)}}},
-            pdfcreator={{shortlistr}}]{{hyperref}}
+            pdfcreator={{Shortlistr}}]{{hyperref}}
 
 \pagestyle{{empty}}
 \linespread{{{density.linespread}}}

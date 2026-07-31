@@ -68,6 +68,44 @@ def test_apply_channel_detection():
     assert apply_channel_for({}) == "manual"
 
 
+def test_job_board_listings_are_link_only():
+    """LinkedIn/Naukri postings are ads, not fillable forms — no prefill offered."""
+    from api.jobs_api import apply_channel_for
+    from apply.channels import is_link_only
+
+    assert apply_channel_for({"url": "https://www.linkedin.com/jobs/view/123"}) == "link"
+    assert apply_channel_for({"url": "https://www.naukri.com/job-listings-abc"}) == "link"
+    assert apply_channel_for({"url": "https://x", "source": "LinkedIn Guest"}) == "link"
+    assert apply_channel_for({"url": "https://boards.greenhouse.io/acme/jobs/1"}) == "form"
+
+    # An employer email still beats the board listing.
+    assert (
+        apply_channel_for({"url": "https://in.indeed.com/x", "company_email": "jobs@acme.com"})
+        == "email"
+    )
+
+    assert is_link_only("https://in.indeed.com/viewjob?jk=1")
+    assert not is_link_only("https://jobs.lever.co/acme/1", "Lever")
+
+
+def test_apply_assist_refuses_link_only_posting(monkeypatch):
+    _isolate(monkeypatch)
+    import apply.ats_fill as ats_fill
+    from apply.channels import NotFillableError
+    from store import db
+
+    db.init_db()
+    jid = _seed("https://www.linkedin.com/jobs/view/999")
+
+    def _boom(*a, **k):
+        raise AssertionError("browser must not open for a link-only posting")
+
+    monkeypatch.setattr(ats_fill, "fill_application_form", _boom)
+
+    with pytest.raises(NotFillableError):
+        ats_fill.apply_assist_for_job(jid)
+
+
 def test_send_application_gated_then_sends(monkeypatch):
     pytest.importorskip("fastapi")
     _isolate(monkeypatch)

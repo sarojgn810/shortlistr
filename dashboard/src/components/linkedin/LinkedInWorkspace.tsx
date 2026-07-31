@@ -145,7 +145,7 @@ export function LinkedInWorkspace() {
   const [tab, setTab] = useState<LinkedInTabId>("overview");
   const [state, setState] = useState<LinkedInOptimizerState | null>(null);
   const [profile, setProfile] = useState<LinkedInProfile>(EMPTY_PROFILE);
-  const [role, setRole] = useState("sre");
+  const [role, setRole] = useState("");
   const [linkedinUrl, setLinkedinUrl] = useState("");
   const [paste, setPaste] = useState("");
   const [score, setScore] = useState<LinkedInScore | null>(null);
@@ -182,7 +182,7 @@ export function LinkedInWorkspace() {
       const s = await api.linkedInState();
       setState(s);
       setProfile(s.profile || EMPTY_PROFILE);
-      setRole(s.target_role || "sre");
+      setRole(s.target_role || "");
       setScore(s.score);
       setThemes(s.cover_themes || []);
       setLinkedinUrl(s.linkedin_url || s.profile?.linkedin_url || "");
@@ -349,7 +349,10 @@ export function LinkedInWorkspace() {
       const out = await api.linkedInCoverRender({
         theme_id: coverTheme,
         name: profile.name || "Your Name",
-        headline: profile.headline || "Site Reliability · Platform",
+        headline:
+          profile.headline ||
+          state?.roles?.find((r) => r.id === role)?.label ||
+          "Open to opportunities",
         subline: coverSubline,
       });
       setCoverSvg(out.svg);

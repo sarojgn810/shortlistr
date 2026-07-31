@@ -38,12 +38,17 @@ _LIST_JOB_COLUMNS = """
 
 
 def apply_channel_for(job: dict) -> str:
-    """How this job gets applied to: email (has company_email) | form (has URL) | manual."""
+    """How this job gets applied to: email | link (board listing) | form (ATS) | manual."""
+    from apply.channels import is_link_only
+
     if (job.get("company_email") or "").strip():
         return "email"
-    if (job.get("url") or "").strip():
-        return "form"
-    return "manual"
+    url = (job.get("url") or "").strip()
+    if not url:
+        return "manual"
+    if is_link_only(url, str(job.get("source") or "")):
+        return "link"
+    return "form"
 
 
 def dedupe_skills(items: list[Any], limit: int = 20) -> list[str]:

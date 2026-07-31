@@ -3,6 +3,7 @@
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import type { Job } from "@/src/types/job";
+import { resolveApplyChannel } from "@/src/lib/applyChannel";
 
 interface JobRowProps {
   job: Job;
@@ -23,7 +24,10 @@ function scoreLabel(job: Job): string {
 }
 
 function channelLabel(c?: string): string {
-  return c === "email" ? "Email" : c === "form" ? "Form" : c === "manual" ? "Manual" : "";
+  if (c === "email") return "Email";
+  if (c === "form") return "Form";
+  if (c === "link") return "Apply on site";
+  return c === "manual" ? "Manual" : "";
 }
 
 export default function JobRow({ job, onView, selectable, selected, onToggle }: JobRowProps) {
@@ -60,7 +64,7 @@ export default function JobRow({ job, onView, selectable, selected, onToggle }: 
       </div>
       <div className="hidden shrink-0 items-center gap-2 md:flex">
         {job.source && <Badge variant="default">{job.source}</Badge>}
-        {job.apply_channel && <Badge variant="default">{channelLabel(job.apply_channel)}</Badge>}
+        <Badge variant="default">{channelLabel(resolveApplyChannel(job))}</Badge>
         {job.eval_template_only && <Badge variant="orange">Template</Badge>}
         {job.legitimacy && <Badge variant="lime">{job.legitimacy}</Badge>}
         {job.pipeline_status && (

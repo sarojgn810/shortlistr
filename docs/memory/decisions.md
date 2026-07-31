@@ -13,6 +13,30 @@ Template:
 
 ---
 
+## 2026-07-31 — Shortlistr résumé templates + Resume page UX
+**Decision:** Keep the 12 single-column LaTeX skins (IDs unchanged for
+settings continuity) but rebrand display names to **Shortlistr …** (Classic,
+Professional, Compact, Campus, Crimson, Teal, Serif, Executive, Skills, Air,
+Split, Plain). Catalogue lists `recommended` + `inspiration` (Jake/sb2nov,
+Awesome-CV, Reactive-Resume, latexcv). Resume `/cv` gains upload, clearer
+Generate PDF CTA, and a template gallery with Recommended badges.
+**Why:** Users saw weak/ambiguous template names and a Resume page that told
+them to upload elsewhere. PDF truth remains LaTeX; HTML preview stays approximate.
+**Touches:** `automation/cv/templates.py`, `latex_layout.py`, `templates/cv-latex/`,
+`dashboard/.../CvWorkspace.tsx`, `app/cv/page.tsx`, client `CvTemplate` type.
+
+## 2026-07-31 — Chat agent uses profile + shared Telegram front-end
+**Decision:** Inject a compact profile/CV snapshot into `agent.chat` system
+prompt (`agent/user_context.py`). Expand tools with `shortlistr.whoami`,
+`shortlistr.skip`, `shortlistr.prep`. Telegram stays a thin front-end on the same
+`chat()` core: persist `chat_id` + short history in `data/telegram_bot.json`,
+expose `notify` / `notify_job`, and ping the phone when the agent evaluates a
+job ≥ 3.5/5 (best-effort; requires `make telegram` running). Never auto-submit.
+**Why:** Chat previously knew tools but not the candidate; Telegram had no
+memory or outbound path and overclaimed “approve/skip prompts.”
+**Touches:** `automation/agent/{chat,registry,dispatch,user_context}.py`,
+`connectors/telegram.py`, Connections Telegram copy, tests.
+
 ## 2026-07-30 — Writing quality layer (not detector evasion)
 **Decision:** Add `automation/writing/` (policy, sanitize, style prompts,
 self_check) and wire it per call site for cover letters, LinkedIn

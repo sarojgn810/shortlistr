@@ -6,6 +6,7 @@ import { Button } from "@/src/components/ui/Button";
 import { Skeleton } from "@/src/components/ui/Skeleton";
 import { PrepGuide } from "@/src/components/prep/PrepGuide";
 import { api, ApiError } from "@/src/lib/api/client";
+import { isLinkOnlyJob } from "@/src/lib/applyChannel";
 import type { PrepBundle, ResumeDiff } from "@/src/types/job";
 
 function isResumeDiff(diff: PrepBundle["diff"]): diff is ResumeDiff {
@@ -109,6 +110,12 @@ export function PrepDetailPanel({
     return <p className="text-base text-stone">Prep not found for this role.</p>;
   }
 
+  const linkOnly = isLinkOnlyJob({
+    apply_channel: bundle.apply_channel,
+    url: bundle.url,
+    source: bundle.source,
+  });
+
   return (
     <div className="space-y-6">
       {showActions && (
@@ -116,9 +123,11 @@ export function PrepDetailPanel({
           <Button variant="lime" onClick={handleGenerate} isLoading={isGenerating}>
             Generate / refresh materials
           </Button>
-          <Button variant="secondary" onClick={handleApplyAssist} isLoading={applyAssisting}>
-            Prefill form
-          </Button>
+          {!linkOnly && (
+            <Button variant="secondary" onClick={handleApplyAssist} isLoading={applyAssisting}>
+              Prefill form
+            </Button>
+          )}
           {bundle.url && (
             <a
               href={bundle.url}
@@ -181,12 +190,23 @@ export function PrepDetailPanel({
         <section className="space-y-6">
           {isResumeDiff(bundle.diff) && (
             <div className="rounded-2xl border border-mist bg-white p-5">
-              <h3 className="mb-3 text-lg font-bold text-ink">
-                Résumé prep ({bundle.diff.change_count} changes)
-              </h3>
-              <pre className="max-h-64 overflow-y-auto rounded-2xl bg-black/5 p-4 font-mono text-sm text-ink">
-                {bundle.diff.diff.slice(0, 50).join("\n") || bundle.diff.tailored_preview}
-              </pre>
+              <h3 className="mb-3 text-lg font-bold text-ink">Résumé prep</h3>
+              <p className="text-base text-ink">
+                {bundle.diff.summary ||
+                  (bundle.diff.same_as_baseline
+                    ? "Same content as your baseline résumé."
+                    : `${bundle.diff.change_count} changes`)}
+              </p>
+              <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm text-stone">
+                {(bundle.diff.highlights?.length
+                  ? bundle.diff.highlights
+                  : bundle.diff.diff || []
+                )
+                  .slice(0, 8)
+                  .map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+              </ul>
             </div>
           )}
 
@@ -194,8 +214,17 @@ export function PrepDetailPanel({
             <p className="font-bold text-ink">Next steps</p>
             <ol className="mt-3 list-decimal space-y-2 pl-5">
               <li>Review cover letter and edit if needed</li>
-              <li>Prefill the application form in the browser</li>
-              <li>Attach the CV PDF if the form did not auto-upload</li>
+              {linkOnly ? (
+                <>
+                  <li>Open the posting on the job board and apply there</li>
+                  <li>Upload the CV PDF and paste the cover letter</li>
+                </>
+              ) : (
+                <>
+                  <li>Prefill the application form in the browser</li>
+                  <li>Attach the CV PDF if the form did not auto-upload</li>
+                </>
+              )}
               <li>Click Submit yourself on the employer site</li>
             </ol>
           </div>

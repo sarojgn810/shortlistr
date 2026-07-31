@@ -6,9 +6,12 @@ import { CvWorkspace } from "@/src/components/cv/CvWorkspace";
 export default function CvPage() {
   return (
     <DashboardShell title="Resume" breadcrumbs={["Home", "Resume"]}>
-      <p className="mb-6 text-base leading-relaxed text-stone">
-        View, edit, and download your resume. Pick an ATS-friendly template and regenerate anytime.
-      </p>
+      <div className="mb-6 max-w-3xl space-y-2">
+        <p className="text-base leading-relaxed text-stone">
+          Upload your file or build an ATS-safe PDF with a Shortlistr template. Edit the markdown,
+          pick a length, then generate — the compiled PDF is what employers receive.
+        </p>
+      </div>
       <CvWorkspace />
     </DashboardShell>
   );

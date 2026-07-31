@@ -89,9 +89,14 @@ def render_cover_svg(
     headline = escape((headline or "").strip()[:110])
     subline = escape((subline or "").strip()[:90])
     if not headline:
-        headline = "Site Reliability · Platform · Cloud"
+        try:
+            from linkedin_optimizer.roles import get_role
+
+            headline = escape(get_role(None)["label"])
+        except Exception:
+            headline = "Open to opportunities"
     if not subline:
-        subline = "Open to opportunities · Reliable systems at scale"
+        subline = "Open to opportunities"
 
     # Decorative shapes — keep simple so SVG downloads cleanly.
     return f'''<?xml version="1.0" encoding="UTF-8"?>

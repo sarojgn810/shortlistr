@@ -176,3 +176,49 @@ def test_cover_svg_themes():
     assert "svg" in svg.lower()
     assert "ADA LOVELACE" in svg
     assert "1584" in svg
+
+
+def test_role_from_profile_titles(monkeypatch):
+    import config
+    from linkedin_optimizer.roles import detect_role_id, role_from_profile
+
+    monkeypatch.setattr(config, "_FILTERS", {"target_titles": ["Full Stack Engineer", "React"]}, raising=False)
+    monkeypatch.setattr(config, "SEARCH_KEYWORDS", [], raising=False)
+    assert role_from_profile() == "fullstack"
+    assert detect_role_id("Senior DevOps Engineer") == "devops"
+    assert detect_role_id("ML Engineer · LLMs") == "ai_engineer"
+
+
+def test_stale_linkedin_draft_ignored(tmp_path, monkeypatch):
+    """Draft from another person's profile must not drive LinkedIn targeting."""
+    import config
+    import linkedin_optimizer.service as svc
+    from linkedin_optimizer.service import get_state
+
+    monkeypatch.setattr(svc, "DRAFT_PATH", str(tmp_path / "li.json"))
+    monkeypatch.setattr(svc, "CV_MD_PATH", str(tmp_path / "missing.md"))
+    monkeypatch.setattr(
+        config,
+        "CANDIDATE",
+        {"name": "Other Person", "email": "other@example.com"},
+        raising=False,
+    )
+    monkeypatch.setattr(
+        config,
+        "_FILTERS",
+        {"target_titles": ["Full Stack Developer"]},
+        raising=False,
+    )
+    monkeypatch.setattr(config, "SEARCH_KEYWORDS", ["Full Stack Developer"], raising=False)
+
+    # Simulate a draft left over from a previous personal install.
+    (tmp_path / "li.json").write_text(
+        '{"owner":"realsarojnayak@gmail.com","target_role":"sre",'
+        '"profile":{"name":"SAROJ NAYAK","headline":"SRE","about":"'
+        + ("x" * 100)
+        + '","experience":[{"title":"SRE","bullets":["a","b"]}],"skills":["k8s","aws","linux","python","terraform"]}}',
+        encoding="utf-8",
+    )
+    state = get_state()
+    assert state["target_role"] == "fullstack"
+    assert (state.get("profile") or {}).get("name") in ("", "Other Person")

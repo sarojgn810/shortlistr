@@ -184,6 +184,9 @@ export interface CvTemplate {
   name: string;
   description: string;
   ats_notes: string;
+  family?: string;
+  recommended?: boolean;
+  inspiration?: string;
 }
 
 export interface AtsScore {
@@ -744,12 +747,12 @@ export const api = {
   linkedInImportCv: (target_role?: string) =>
     request<LinkedInImportResult>("/linkedin/optimizer/import-cv", {
       method: "POST",
-      body: JSON.stringify({ target_role: target_role ?? null }),
+      body: JSON.stringify({ target_role: target_role || null }),
     }),
   linkedInImportUrl: (url?: string, target_role?: string) =>
     request<LinkedInImportResult>("/linkedin/optimizer/import-url", {
       method: "POST",
-      body: JSON.stringify({ url: url || null, target_role: target_role || "sre" }),
+      body: JSON.stringify({ url: url || null, target_role: target_role || null }),
     }),
   linkedInSave: (profile: LinkedInProfile, target_role: string) =>
     request<{
