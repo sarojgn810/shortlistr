@@ -61,7 +61,8 @@ def generate_cv_for_job(job: dict) -> dict:
     template_id, page_target = _cv_preferences()
     company = re.sub(r"[^\w\s-]", "", job.get("company", "Company")).strip().replace(" ", "_") or "Company"
     date_str = datetime.now().strftime("%Y-%m-%d")
-    basename = f"{company}-{date_str}"
+    job_id = re.sub(r"[^a-zA-Z0-9_-]", "", str(job.get("job_id") or job.get("id") or ""))[:64]
+    basename = f"{job_id}-{company}-{date_str}" if job_id else f"{company}-{date_str}"
     html_path = os.path.join(OUTPUT_DIR, f"{basename}.html")
     pdf_path = os.path.join(OUTPUT_DIR, f"{basename}.pdf")
     tex_path = os.path.join(OUTPUT_DIR, f"{basename}.tex")

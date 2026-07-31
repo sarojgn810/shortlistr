@@ -398,7 +398,13 @@ def apply_assist_for_job(job_id: str, *, headless: bool = True) -> dict[str, Any
     from processors.generate_cv import generate_cv_for_job
 
     company = str(row["company"] or "")
-    job_payload = {"url": row["url"], "company": company, "title": row["title"] or "", "jd_snippet": ""}
+    job_payload = {
+        "url": row["url"],
+        "company": company,
+        "title": row["title"] or "",
+        "jd_snippet": "",
+        "job_id": jid,
+    }
 
     # Which résumé to attach. In "generated" mode, render a fresh tailored CV for THIS
     # exact job and attach that precise file — deterministic, and it always matches the
@@ -419,7 +425,7 @@ def apply_assist_for_job(job_id: str, *, headless: bool = True) -> dict[str, Any
         except Exception as exc:
             logger.debug("Tailored CV generation failed, falling back: %s", exc)
     if not cv_pdf:
-        cv_pdf = resolve_resume_pdf(company)  # uploaded original (or last tailored)
+        cv_pdf = resolve_resume_pdf(company, job_id=jid)
     if not cv_pdf:
         try:
             gen = generate_cv_for_job(job_payload)

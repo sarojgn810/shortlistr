@@ -1002,7 +1002,7 @@ def create_app():
         subject = generate_subject(job)
         from apply.ats_strategies import resolve_resume_pdf
 
-        resume_path = resolve_resume_pdf(job.get("company", ""), tenant)
+        resume_path = resolve_resume_pdf(job.get("company", ""), tenant, job_id=job_id)
         sent = send_application_email(
             to_email=to_email, subject=subject, body=letter,
             job_id=job_id, company=job.get("company", ""), role=job.get("title", ""),
@@ -1293,7 +1293,7 @@ def create_app():
             row = conn.execute("SELECT company FROM jobs WHERE id = ?", (job_id,)).fetchone()
         if not row:
             raise HTTPException(404, "Job not found")
-        path = find_cv_pdf(str(row["company"] or ""))
+        path = find_cv_pdf(str(row["company"] or ""), job_id=job_id)
         if not path or not os.path.isfile(path) or not _allowed_cv_path(path):
             raise HTTPException(404, "No CV PDF yet — generate prep materials first")
         return FileResponse(path, media_type="application/pdf", filename=os.path.basename(path))

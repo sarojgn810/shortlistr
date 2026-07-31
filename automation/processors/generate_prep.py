@@ -275,10 +275,12 @@ _BEHAVIOURAL = _COMMON_BEHAVIOURAL
 
 def _build_prep_doc(job: dict, cv_md: str) -> str:
     company   = job.get("company", "Company")
-    title     = job.get("title", "SRE")
+    title     = job.get("title", "Role")
     url       = job.get("url", "")
     jd        = job.get("jd_snippet", "")
+    job_id    = str(job.get("job_id") or job.get("id") or "").strip()
     fit_score = job.get("fit_score", 0)
+    eval_score = job.get("eval_score")
     fit_reason= job.get("fit_reason", "")
     role_type = _detect_role_type(title, jd)
     date_str  = datetime.now().strftime("%Y-%m-%d")
@@ -287,11 +289,42 @@ def _build_prep_doc(job: dict, cv_md: str) -> str:
     skills       = _load_skills(cv_md)
     questions    = _get_question_bank(role_type, company)
 
+    from prep.ownership import front_matter, owner_key
+
+    owner = owner_key()
+    header = front_matter(job_id=job_id or "unknown", owner=owner, company=company, role=title)
+
+    # Prefer eval /5 when present; else discovery /100.
+    try:
+        eval_n = float(eval_score) if eval_score is not None else 0.0
+    except (TypeError, ValueError):
+        eval_n = 0.0
+    try:
+        disc_n = float(fit_score) if fit_score is not None else 0.0
+    except (TypeError, ValueError):
+        disc_n = 0.0
+    if eval_n > 0:
+        fit_line = f"**Fit Score:** {eval_n:.1f}/5 (evaluated)"
+    elif disc_n > 0:
+        fit_line = f"**Fit Score:** {disc_n:.0f}/100 (discovery)"
+    else:
+        fit_line = "**Fit Score:** not scored yet"
+
+    cand_name = ""
+    try:
+        from config import CANDIDATE
+
+        cand_name = str((CANDIDATE or {}).get("name") or "").strip()
+    except Exception:
+        pass
+
     lines = [
         f"# Interview Prep — {company}",
-        f"**Role:** {title}  |  **Date:** {date_str}  |  **Fit Score:** {fit_score}/100",
+        f"**Role:** {title}  |  **Date:** {date_str}  |  {fit_line}",
         "",
     ]
+    if cand_name:
+        lines += [f"**Prepared for:** {cand_name}", ""]
 
     if url:
         lines += [f"**Job URL:** {url}", ""]
@@ -372,7 +405,7 @@ def _build_prep_doc(job: dict, cv_md: str) -> str:
         "",
     ]
 
-    return "\n".join(lines)
+    return header + "\n".join(lines)
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
@@ -395,14 +428,31 @@ def generate_prep_for_job(job: dict) -> dict:
     try:
         from writing.sanitize import sanitize
 
-        content = sanitize(content, mode="prose")
+        # Keep YAML front matter intact — sanitize body only.
+        from prep.ownership import parse_front_matter, front_matter, owner_key
+
+        meta, body = parse_front_matter(content)
+        body = sanitize(body, mode="prose")
+        job_id = str(job.get("job_id") or job.get("id") or meta.get("job_id") or "unknown")
+        content = front_matter(
+            job_id=job_id,
+            owner=owner_key(),
+            company=str(job.get("company") or ""),
+            role=str(job.get("title") or ""),
+        ) + body
     except Exception:
         pass
-    company  = re.sub(r'[^\w\s-]', '', job.get("company", "Company")).strip().replace(" ", "_")
-    role     = re.sub(r'[^\w\s-]', '', job.get("title", "SRE")).strip().replace(" ", "_")
-    date_str = datetime.now().strftime("%Y-%m-%d")
-    filename = f"{company}-{role}-{date_str}.md"
-    path     = os.path.join(PREP_DIR, filename)
+
+    from prep.ownership import prep_path_for_job
+
+    job_id = str(job.get("job_id") or job.get("id") or "").strip()
+    if job_id:
+        path = prep_path_for_job(job_id)
+    else:
+        company  = re.sub(r'[^\w\s-]', '', job.get("company", "Company")).strip().replace(" ", "_")
+        role     = re.sub(r'[^\w\s-]', '', job.get("title", "Role")).strip().replace(" ", "_")
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        path     = os.path.join(PREP_DIR, f"{company}-{role}-{date_str}.md")
 
     try:
         with open(path, "w", encoding="utf-8") as f:

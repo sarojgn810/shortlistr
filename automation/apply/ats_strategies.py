@@ -19,7 +19,12 @@ def uploaded_resume_pdf() -> str | None:
     return path if os.path.isfile(path) else None
 
 
-def resolve_resume_pdf(company: str = "", tenant_id: str = "default") -> str | None:
+def resolve_resume_pdf(
+    company: str = "",
+    tenant_id: str = "default",
+    *,
+    job_id: str = "",
+) -> str | None:
     """Pick the resume to send, honoring cv_settings.resume_source.
 
     "uploaded" -> the user's original resume.pdf as-is (fallback: tailored).
@@ -33,7 +38,7 @@ def resolve_resume_pdf(company: str = "", tenant_id: str = "default") -> str | N
         source = "uploaded"
 
     uploaded = uploaded_resume_pdf()
-    tailored = find_cv_pdf(company)
+    tailored = find_cv_pdf(company, job_id=job_id)
     if source == "generated":
         return tailored or uploaded
     return uploaded or tailored
@@ -77,8 +82,13 @@ def field_pack_for_ats(ats: str) -> list[tuple[str, str]]:
     return _ATS_FIELD_PACKS.get(ats, [])
 
 
-def find_cv_pdf(company: str = "") -> str | None:
-    """Latest tailored PDF in output/ — prefer company slug match."""
+def find_cv_pdf(company: str = "", *, job_id: str = "") -> str | None:
+    """Latest tailored PDF in output/ — prefer job_id, then company slug.
+
+    Never returns an unrelated PDF when a company (or job_id) filter is set:
+    falling back to ``pdfs[0]`` is what let another laptop's résumé attach to
+    the wrong role on Prep / apply-assist.
+    """
     import config
 
     output_dir = config.OUTPUT_DIR  # read dynamically so tests can isolate it
@@ -87,12 +97,21 @@ def find_cv_pdf(company: str = "") -> str | None:
     pdfs = sorted(glob.glob(os.path.join(output_dir, "*.pdf")), key=os.path.getmtime, reverse=True)
     if not pdfs:
         return None
+
+    jid = re.sub(r"[^a-zA-Z0-9_-]", "", str(job_id or ""))[:64]
+    if jid:
+        for path in pdfs:
+            if jid.lower() in os.path.basename(path).lower():
+                return path
+
     if company:
         slug = re.sub(r"[^a-z0-9]+", "", company.lower())
         for path in pdfs:
-            base = os.path.basename(path).lower()
-            if slug and slug[:4] in base.replace("-", "").replace("_", ""):
+            base = os.path.basename(path).lower().replace("-", "").replace("_", "")
+            if slug and slug[:4] and slug[:4] in base:
                 return path
+        return None
+
     return pdfs[0]
 
 

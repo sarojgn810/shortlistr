@@ -220,6 +220,11 @@ export interface PrepSummary {
   has_cv_pdf: boolean;
   ready: boolean;
   updated_at: string;
+  candidate_name?: string;
+  fit_score?: number;
+  eval_score?: number | null;
+  fit_label?: string;
+  fit_reason?: string;
 }
 
 export type PageTarget = "auto" | "1" | "2";

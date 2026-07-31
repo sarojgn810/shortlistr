@@ -48,8 +48,14 @@ def _seed(store, job_id: str, company: str, title: str, status: str = "approved"
 
 def test_list_prep_includes_approved_jobs(isolated, monkeypatch):
     store, _prep_dir, prep_bundle = isolated
-    monkeypatch.setattr(prep_bundle, "_latest_prep_path", lambda company, role: None)
-    monkeypatch.setattr("apply.ats_strategies.find_cv_pdf", lambda company="": None)
+    monkeypatch.setattr(
+        "prep.ownership.load_owned_prep",
+        lambda job_id, prep_dir=None, url="": (None, None),
+    )
+    monkeypatch.setattr(
+        "api.prep_bundle._find_cv_for_job",
+        lambda job_id, company: None,
+    )
     monkeypatch.setattr(
         "store.prep_drafts.get_cover_letter_draft",
         lambda job_id, tenant_id="default": None,
@@ -69,23 +75,29 @@ def test_list_prep_includes_approved_jobs(isolated, monkeypatch):
 
 def test_list_prep_marks_ready_when_guide_exists(isolated, monkeypatch):
     store, prep_dir, prep_bundle = isolated
-    guide = os.path.join(prep_dir, "Acme-Staff_Engineer-2026-07-30.md")
-    with open(guide, "w", encoding="utf-8") as f:
-        f.write("# Prep\n")
+    from prep.ownership import front_matter, prep_path_for_job
 
-    monkeypatch.setattr(
-        prep_bundle,
-        "_latest_prep_path",
-        lambda company, role: guide if "Acme" in company else None,
-    )
-    monkeypatch.setattr("apply.ats_strategies.find_cv_pdf", lambda company="": None)
+    job_id = "cccccccccccccccc"
+    guide = prep_path_for_job(job_id, prep_dir)
+    with open(guide, "w", encoding="utf-8") as f:
+        f.write(front_matter(job_id=job_id, owner="test@example.com") + "# Prep\n")
+
     monkeypatch.setattr(
         "store.prep_drafts.get_cover_letter_draft",
         lambda job_id, tenant_id="default": None,
     )
+    monkeypatch.setattr(
+        "api.prep_bundle._find_cv_for_job",
+        lambda job_id, company: None,
+    )
+    monkeypatch.setattr(
+        "prep.ownership.owner_key",
+        lambda: "test@example.com",
+    )
 
-    _seed(store, "cccccccccccccccc", "Acme", "Staff Engineer", "approved")
+    _seed(store, job_id, "Acme", "Staff Engineer", "approved")
     items = prep_bundle.list_prep_summaries()
-    acme = next(i for i in items if i["job_id"] == "cccccccccccccccc")
+    acme = next(i for i in items if i["job_id"] == job_id)
     assert acme["has_prep_guide"] is True
     assert acme["ready"] is True
+    assert "fit_label" in acme

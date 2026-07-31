@@ -13,6 +13,17 @@ Template:
 
 ---
 
+## 2026-07-31 — Prep artifacts are job-scoped and owner-stamped
+**Decision:** Interview prep guides live at `interview-prep/{job_id}.md` with
+YAML `owner` (profile email) + `job_id`. Foreign or unstamped company-named
+files are ignored. Tailored CV PDFs include `job_id` in the basename;
+`find_cv_pdf(company)` returns `None` rather than a random PDF. Prep UI is a
+sticky master–detail with live fit labels.
+**Why:** Company-name glob + `pdfs[0]` fallback leaked another profile's
+materials across laptops.
+**Touches:** `prep/ownership.py`, `api/prep_bundle.py`, `generate_prep.py`,
+`generate_cv.py`, `ats_strategies.find_cv_pdf`, Prep page components.
+
 ## 2026-07-31 — Resume preview paginates instead of crushing type
 **Decision:** HTML CV preview defaults to multi-page when content overflows at
 a readable size. Sheets are viewport-width (not fixed 210mm inside a narrow

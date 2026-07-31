@@ -106,6 +106,14 @@ export interface PrepBundle {
   prep_content?: string | null;
   cv_pdf_path?: string | null;
   diff?: ResumeDiff | { error?: string };
+  candidate_name?: string;
+  owner?: string;
+  fit_score?: number;
+  eval_score?: number | null;
+  fit_label?: string;
+  fit_reason?: string;
+  fit_primary?: number;
+  fit_scale?: string;
 }
 
 export interface TrackerCard {

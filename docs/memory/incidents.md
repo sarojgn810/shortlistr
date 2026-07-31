@@ -14,6 +14,18 @@ Template:
 
 ---
 
+## 2026-07-31 — Prep page showed another laptop's proof points
+**Symptom:** Prep guides / CV PDF / skills on Prep belonged to a different
+person after copying the project folder between machines.
+**Root cause:** `_latest_prep_path` matched `interview-prep/*Company*` (and
+could fall back to any file); `find_cv_pdf` fell back to the newest PDF in
+`output/` when the company slug missed.
+**Fix:** Prep files are `{job_id}.md` with `owner` + `job_id` front matter;
+load only owned guides; CV PDFs prefer `job_id` in the filename and never
+return an unrelated PDF when a company filter is set. Fit score (eval /5 or
+discovery /100) is passed through and shown on Prep.
+**Guard:** `tests/test_prep_ownership.py`.
+
 ## 2026-07-31 — Resume HTML preview looked oversized and clipped long CVs
 **Symptom:** Template / Quick preview showed huge type and cut off lengthy
 resumes instead of flowing onto page 2.

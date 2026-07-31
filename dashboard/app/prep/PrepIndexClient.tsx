@@ -16,7 +16,6 @@ import { PrepDetailPanel } from "@/src/components/prep/PrepDetailPanel";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
-import { Modal } from "@/src/components/ui/Modal";
 import { CardSkeleton } from "@/src/components/ui/Skeleton";
 import { api, ApiError, type PrepSummary } from "@/src/lib/api/client";
 import { matchesPipelineSearch, usePipelineSearch } from "@/src/hooks/usePipelineSearch";
@@ -57,31 +56,55 @@ export default function PrepIndexClient() {
 
   useEffect(() => {
     const job = searchParams.get("job");
-    if (job) setSelectedId(job);
+    if (job) {
+      setSelectedId(job);
+      return;
+    }
+    // Auto-select first card on desktop so the detail pane is never empty.
   }, [searchParams]);
+
+  useEffect(() => {
+    if (selectedId || loading || items.length === 0) return;
+    if (searchParams.get("job")) return;
+    // Prefer a ready pack; otherwise the first approved role.
+    const preferred = items.find((i) => i.ready) || items[0];
+    if (preferred && typeof window !== "undefined" && window.innerWidth >= 1024) {
+      setSelectedId(preferred.job_id);
+    }
+  }, [items, loading, selectedId, searchParams]);
 
   const openItem = (jobId: string) => {
     setSelectedId(jobId);
     router.replace(`/prep?job=${jobId}`, { scroll: false });
-  };
-
-  const closeModal = () => {
-    setSelectedId(null);
-    router.replace("/prep", { scroll: false });
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      document
+        .getElementById("prep-detail-pane")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   };
 
   const selected = items.find((i) => i.job_id === selectedId) || null;
   const visible = items.filter((i) =>
     matchesPipelineSearch({ company: i.company, title: i.role, url: i.url }, query)
   );
+  const candidateName =
+    selected?.candidate_name || items.find((i) => i.candidate_name)?.candidate_name || "";
 
   return (
     <DashboardShell title="Prep" breadcrumbs={["Home", "Prep"]}>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-3xl text-base leading-relaxed text-stone">
-          Cover letters, interview guides, and tailored résumés for roles you have approved.
-          Open a company to review everything in one place before you apply.
-        </p>
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div className="max-w-3xl">
+          <p className="text-base leading-relaxed text-stone">
+            Cover letters, interview guides, and tailored résumés for roles you approved.
+            {candidateName ? (
+              <>
+                {" "}
+                Materials are scoped to <span className="font-semibold text-ink">{candidateName}</span>
+                — regenerating rebuilds them from your live profile and CV.
+              </>
+            ) : null}
+          </p>
+        </div>
         <Button variant="ghost" size="sm" onClick={() => void refresh()} disabled={loading}>
           <RefreshCw size={16} />
           Refresh
@@ -91,10 +114,11 @@ export default function PrepIndexClient() {
       {error && <p className="mb-4 text-base text-orange">{error}</p>}
 
       {loading ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-5">
           <CardSkeleton />
-          <CardSkeleton />
-          <CardSkeleton />
+          <div className="lg:col-span-3">
+            <CardSkeleton />
+          </div>
         </div>
       ) : visible.length === 0 ? (
         <Card padding="lg">
@@ -113,117 +137,139 @@ export default function PrepIndexClient() {
           </div>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {visible.map((item) => {
-            const initial = (item.company[0] || "?").toUpperCase();
-            return (
-              <button
-                key={item.job_id}
-                type="button"
-                onClick={() => openItem(item.job_id)}
-                className="group text-left"
-              >
-                <Card
-                  padding="lg"
-                  className="flex h-full flex-col gap-4 transition-all hover:border-lime/50 hover:shadow-lg"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-ink text-lg font-bold text-lime">
-                      {initial}
+        <div className="flex flex-col gap-5 lg:grid lg:grid-cols-5 lg:items-start lg:gap-6">
+          <div className="order-2 space-y-3 lg:order-1 lg:col-span-2">
+            <p className="text-sm font-bold text-stone">
+              {visible.length} role{visible.length === 1 ? "" : "s"}
+            </p>
+            <div className="max-h-[min(62vh,640px)] space-y-2 overflow-y-auto overscroll-contain rounded-2xl border border-mist bg-white/70 p-2 lg:max-h-[min(78vh,860px)]">
+              {visible.map((item) => {
+                const selectedRow = item.job_id === selectedId;
+                const initial = (item.company[0] || "?").toUpperCase();
+                return (
+                  <button
+                    key={item.job_id}
+                    type="button"
+                    onClick={() => openItem(item.job_id)}
+                    className={`w-full rounded-xl border px-3 py-3 text-left transition ${
+                      selectedRow
+                        ? "border-lime bg-lime/10 ring-1 ring-lime/30"
+                        : "border-transparent bg-white hover:border-mist hover:bg-mist/40"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ink text-sm font-bold text-lime">
+                        {initial}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="truncate font-bold text-ink">{item.company}</p>
+                          <Badge variant={item.ready ? "lime" : "default"} className="shrink-0">
+                            {item.fit_label && item.fit_label !== "—"
+                              ? item.fit_label
+                              : item.ready
+                                ? "Ready"
+                                : "New"}
+                          </Badge>
+                        </div>
+                        <p className="mt-0.5 line-clamp-2 text-sm text-stone">{item.role}</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          {item.location && (
+                            <span className="inline-flex items-center gap-1 text-xs text-stone">
+                              <MapPin size={12} /> {item.location}
+                            </span>
+                          )}
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${
+                              item.has_cover_draft || item.ready
+                                ? "bg-sage/50 text-ink"
+                                : "bg-mist/60 text-stone"
+                            }`}
+                          >
+                            <FileText size={11} /> Letter
+                          </span>
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${
+                              item.has_prep_guide ? "bg-sage/50 text-ink" : "bg-mist/60 text-stone"
+                            }`}
+                          >
+                            <BookOpen size={11} /> Guide
+                          </span>
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${
+                              item.has_cv_pdf ? "bg-sage/50 text-ink" : "bg-mist/60 text-stone"
+                            }`}
+                          >
+                            <Sparkles size={11} /> CV
+                          </span>
+                          <span className="ml-auto text-[11px] capitalize text-stone">
+                            {statusLabel(item)}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <Badge variant={item.ready ? "lime" : "default"}>
-                      {item.ready ? "Ready" : "Needs generate"}
-                    </Badge>
-                  </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-                  <div>
-                    <p className="text-lg font-bold leading-tight text-ink group-hover:text-lime-ink">
-                      {item.company}
-                    </p>
-                    <p className="mt-1 line-clamp-2 text-base font-medium text-stone">
-                      {item.role}
-                    </p>
-                  </div>
-
-                  {(item.location || item.source) && (
-                    <p className="flex flex-wrap items-center gap-2 text-sm text-stone">
-                      {item.location && (
-                        <span className="inline-flex items-center gap-1">
-                          <MapPin size={14} /> {item.location}
-                        </span>
+          <div id="prep-detail-pane" className="order-1 lg:order-2 lg:col-span-3">
+            <div className="sticky top-3 z-10 space-y-3 rounded-2xl border border-mist bg-sage/20 p-3 sm:p-4 lg:top-4">
+              {selected ? (
+                <>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-lg font-bold text-ink">
+                        {selected.company}
+                        {selected.fit_label && selected.fit_label !== "—" ? (
+                          <span className="ml-2 text-base font-semibold text-lime-ink">
+                            Fit {selected.fit_label}
+                          </span>
+                        ) : null}
+                      </p>
+                      <p className="text-sm text-stone">{selected.role}</p>
+                      {selected.fit_reason ? (
+                        <p className="mt-1 line-clamp-2 text-xs text-stone">{selected.fit_reason}</p>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {selected.url && (
+                        <a
+                          href={selected.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded-xl border border-mist bg-white px-3 py-2 text-sm font-semibold text-ink hover:bg-sage/40"
+                        >
+                          Posting <ExternalLink size={14} />
+                        </a>
                       )}
-                      {item.source && <Badge variant="default">{item.source}</Badge>}
-                    </p>
-                  )}
-
-                  <div className="mt-auto flex flex-wrap gap-2 border-t border-mist/60 pt-3">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-sm font-semibold ${
-                        item.has_cover_draft || item.ready
-                          ? "bg-sage/50 text-ink"
-                          : "bg-mist/60 text-stone"
-                      }`}
-                      title="Cover letter"
-                    >
-                      <FileText size={14} /> Letter
-                    </span>
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-sm font-semibold ${
-                        item.has_prep_guide ? "bg-sage/50 text-ink" : "bg-mist/60 text-stone"
-                      }`}
-                      title="Interview guide"
-                    >
-                      <BookOpen size={14} /> Guide
-                    </span>
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-sm font-semibold ${
-                        item.has_cv_pdf ? "bg-sage/50 text-ink" : "bg-mist/60 text-stone"
-                      }`}
-                      title="Tailored CV"
-                    >
-                      <Sparkles size={14} /> CV
-                    </span>
-                    <Badge variant="default" className="ml-auto capitalize">
-                      {statusLabel(item)}
-                    </Badge>
+                      <Link href={`/prep/${selected.job_id}`}>
+                        <Button variant="ghost" size="sm">
+                          Full page
+                        </Button>
+                      </Link>
+                    </div>
                   </div>
+                  <PrepDetailPanel
+                    jobId={selected.job_id}
+                    showActions
+                    onUpdated={() => void refresh()}
+                  />
+                </>
+              ) : (
+                <Card padding="lg" className="border-0 bg-transparent shadow-none">
+                  <p className="text-lg font-bold text-ink">Select a role</p>
+                  <p className="mt-2 text-base text-stone">
+                    Pick a company from the list to review cover letter, résumé prep, and interview
+                    guide — without scrolling away from the preview.
+                  </p>
                 </Card>
-              </button>
-            );
-          })}
+              )}
+            </div>
+          </div>
         </div>
       )}
-
-      <Modal
-        isOpen={!!selectedId}
-        onClose={closeModal}
-        size="full"
-        title={selected ? `${selected.company} — ${selected.role}` : "Application prep"}
-      >
-        <div className="space-y-4 p-6 pt-4">
-          {selected?.url && (
-            <a
-              href={selected.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm font-semibold text-stone hover:text-ink"
-            >
-              View job posting <ExternalLink size={14} />
-            </a>
-          )}
-          {selectedId && (
-            <PrepDetailPanel jobId={selectedId} showActions onUpdated={() => void refresh()} />
-          )}
-          {selectedId && (
-            <p className="text-sm text-stone">
-              Prefer a full page?{" "}
-              <Link href={`/prep/${selectedId}`} className="font-bold text-ink underline">
-                Open dedicated prep view
-              </Link>
-            </p>
-          )}
-        </div>
-      </Modal>
     </DashboardShell>
   );
 }
