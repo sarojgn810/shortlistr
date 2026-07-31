@@ -94,6 +94,29 @@ export interface CoverLetter {
   mode: "llm" | "template";
 }
 
+export interface ReachOutContact {
+  id: string;
+  name?: string;
+  title?: string;
+  email?: string;
+  linkedin_url?: string;
+  note?: string;
+  source?: "jd" | "user" | string;
+}
+
+export interface ReachOutSearch {
+  label: string;
+  url: string;
+}
+
+export interface ReachOut {
+  contacts: ReachOutContact[];
+  searches: ReachOutSearch[];
+  outreach_draft: string;
+  outreach_generated?: string;
+  disclaimer?: string;
+}
+
 export interface PrepBundle {
   job_id: string;
   company: string;
@@ -102,6 +125,7 @@ export interface PrepBundle {
   apply_channel?: string;
   source?: string;
   cover_letter: CoverLetter;
+  reach_out?: ReachOut;
   prep_path?: string | null;
   prep_content?: string | null;
   cv_pdf_path?: string | null;
@@ -129,6 +153,8 @@ export interface TrackerCard {
   pipeline_status: string | null;
   application_status: string | null;
   score: number | null;
+  fit_score?: number | null;
+  fit_reason?: string | null;
   legitimacy?: string | null;
   applied_date?: string | null;
   application_id?: number | null;

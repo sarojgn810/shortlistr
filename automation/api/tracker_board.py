@@ -62,7 +62,7 @@ def fetch_tracker_board(
     rows = conn.execute(
         f"""
         SELECT j.id, j.company, j.title, j.url, j.location, j.salary, j.source,
-               j.discovered_at, j.updated_at,
+               j.fit_score, j.fit_reason, j.discovered_at, j.updated_at,
                p.status AS pipeline_status, p.added_at AS pipeline_added_at,
                a.status AS application_status, a.score, a.applied_date, a.id AS application_id,
                ev.eval_score, ev.eval_legitimacy,
@@ -125,6 +125,10 @@ def fetch_tracker_board(
         score = d.get("eval_score")
         if score is None and d.get("score") is not None:
             score = d["score"]
+        try:
+            fit_score = float(d.get("fit_score") or 0)
+        except (TypeError, ValueError):
+            fit_score = 0.0
         columns[col].append(
             {
                 "job_id": d["id"],
@@ -139,6 +143,8 @@ def fetch_tracker_board(
                 "pipeline_status": d.get("pipeline_status"),
                 "application_status": d.get("application_status"),
                 "score": float(score) if score is not None else None,
+                "fit_score": fit_score if fit_score > 0 else None,
+                "fit_reason": (d.get("fit_reason") or "")[:240] or None,
                 "legitimacy": d.get("eval_legitimacy"),
                 "applied_date": d.get("applied_date"),
                 "application_id": d.get("application_id"),

@@ -83,8 +83,9 @@ def test_empty_jd_does_not_blame_resume(tmp_path, monkeypatch):
     assert rich["fit_score"] <= 100
 
 
-def test_display_score_clamps_above_five():
-    """Mirror the JobCard mapping so impossible 6.0/5 can't regress silently."""
+def test_display_score_maps_discovery_over_twenty():
+    """Mirror the JobCard mapping (fit/20) so discovery never reads as >5/5."""
     fit_score = 60  # title + provisional + location — the Infosys pending card
-    shown = min(5, fit_score / 10)
-    assert shown == 5.0
+    shown = min(5, fit_score / 20)
+    assert shown == 3.0
+    assert min(5, 100 / 20) == 5.0

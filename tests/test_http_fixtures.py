@@ -76,6 +76,10 @@ def test_tracker_board_columns(isolated_data_dir):
     with store.db() as conn:
         board = fetch_tracker_board(conn)
     assert board["counts"]["approved"] >= 1
+    card = next(c for c in board["columns"]["approved"] if c["job_id"] == job.job_id)
+    assert card.get("score") == 4.2
+    # Unevaluated discovery fit is exposed when present; this row may be 0.
+    assert "fit_score" in card
 
 
 def test_tracker_board_review_hides_off_target(isolated_data_dir, monkeypatch):

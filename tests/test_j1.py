@@ -267,6 +267,29 @@ def test_explain_combines_fit_and_eval(isolated_data_dir):
     assert "Why matched" in text
 
 
+def test_explain_filters_discovery_noise(isolated_data_dir):
+    """Scorer tokens like 'JD not fetched yet' must not be drawer bullets."""
+    from eval.explain import explain_job
+    from store import db as store
+
+    jid = _seed_job(isolated_data_dir)
+    with store.db() as conn:
+        conn.execute(
+            "UPDATE jobs SET fit_reason = ?, jd_text = '' WHERE id = ?",
+            ("title match; preferred location; JD not fetched yet", jid),
+        )
+
+    data = explain_job(jid)
+    joined = " | ".join(data["bullets"]).lower()
+    assert "jd not fetched yet" not in joined
+    assert "preferred location" not in joined
+    assert data["fit_score"] == 72
+    assert data["eval_score"] is None
+    assert data["has_jd"] is False
+    assert any("discovery fit" in b.lower() for b in data["bullets"])
+    assert any("not loaded" in b.lower() or "evaluate" in b.lower() for b in data["bullets"])
+
+
 def test_diff_reports_same_baseline(isolated_data_dir, monkeypatch):
     from prep.diff import build_tailored_text, compute_diff, format_diff_text
     import config

@@ -161,6 +161,12 @@ def enrich_job_dict(job: dict[str, Any]) -> dict[str, Any]:
         out["legitimacy"] = eval_data["legitimacy"]
 
     if blocks:
+        try:
+            from writing.sanitize import sanitize_blocks
+
+            blocks = sanitize_blocks(blocks, mode="prose")
+        except Exception:
+            pass
         out["eval_blocks"] = blocks
     out["eval_template_only"] = bool(
         eval_data.get("template_only")

@@ -26,13 +26,25 @@ const COLUMNS: { label: string; key: "review" | "approved" | "submitted" | "acti
   { label: "Active",   key: "active",    color: "bg-sage/40" },
 ];
 
-function scoreLabel(card: TrackerCard): string {
-  if (card.score != null && card.score > 0) return card.score.toFixed(1);
-  return "—";
+function scoreLabel(card: TrackerCard): { text: string; title: string } {
+  if (card.score != null && card.score > 0) {
+    return {
+      text: card.score.toFixed(1),
+      title: `Evaluated ${card.score.toFixed(1)}/5`,
+    };
+  }
+  if (card.fit_score != null && card.fit_score > 0) {
+    return {
+      text: String(Math.round(card.fit_score)),
+      title: `Discovery fit ${Math.round(card.fit_score)}/100 — run Evaluate for /5`,
+    };
+  }
+  return { text: "—", title: "Not scored yet" };
 }
 
 function JobCard({ card, onOpen }: { card: TrackerCard; onOpen: () => void }) {
   const skills = (card.skills || []).slice(0, 3);
+  const score = scoreLabel(card);
   return (
     <button
       type="button"
@@ -41,8 +53,11 @@ function JobCard({ card, onOpen }: { card: TrackerCard; onOpen: () => void }) {
     >
       <div className="mb-1 flex items-start justify-between gap-2">
         <p className="text-base font-bold leading-tight text-ink">{card.title || "Role pending"}</p>
-        <span className="shrink-0 rounded-lg bg-ink px-2 py-0.5 text-xs font-bold text-lime">
-          {scoreLabel(card)}
+        <span
+          title={score.title}
+          className="shrink-0 rounded-lg bg-ink px-2 py-0.5 text-xs font-bold text-lime"
+        >
+          {score.text}
         </span>
       </div>
       <p className="text-sm text-stone">{card.company || "Company"}</p>
@@ -80,6 +95,7 @@ export default function PipelinePage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [approving, setApproving] = useState(false);
   const [skipping, setSkipping] = useState(false);
+  const [markingApplied, setMarkingApplied] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [applyAssisting, setApplyAssisting] = useState(false);
   const [applyReport, setApplyReport] = useState<import("@/src/types/job").ApplyAssistReport | null>(null);
@@ -145,6 +161,22 @@ export default function PipelinePage() {
       toast.error("Could not update status");
     } finally {
       setSkipping(false);
+    }
+  };
+
+  const handleMarkApplied = async () => {
+    if (!selected || markingApplied) return;
+    setMarkingApplied(true);
+    try {
+      await api.markSubmitted(selected.id);
+      toast.success("Marked applied — moved to Applied");
+      refetch(true);
+      void refreshPendingCount();
+      closeDrawer();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Could not mark applied");
+    } finally {
+      setMarkingApplied(false);
     }
   };
 
@@ -275,8 +307,10 @@ export default function PipelinePage() {
         onEvaluate={handleEvaluate}
         onApprove={handleApprove}
         onSkip={handleSkip}
+        onMarkApplied={handleMarkApplied}
         isApproving={approving}
         isSkipping={skipping}
+        isMarkingApplied={markingApplied}
         onApplyAssist={handleApplyAssist}
         isApplyAssisting={applyAssisting}
         applyAssistReport={applyReport}

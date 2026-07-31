@@ -89,7 +89,7 @@ export default function InboxPage() {
   const HIDDEN_SOURCES = new Set(["eval", "test", "sample"]);
   const sources = Array.from(new Set(jobs.map((j) => j.source).filter(Boolean)))
     .filter((s) => !HIDDEN_SOURCES.has(s.toLowerCase()));
-  const scoreOf = (j: Job) => j.eval_score ?? (j.fit_score ? j.fit_score / 10 : 0);
+  const scoreOf = (j: Job) => j.eval_score ?? (j.fit_score ? j.fit_score / 20 : 0);
   const filtered = visibleJobs.filter(
     (j) =>
       scoreOf(j) >= minScore &&

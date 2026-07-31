@@ -17,12 +17,13 @@ import { plainJobDescription } from "@/src/lib/text";
 import { isLinkOnlyJob } from "@/src/lib/applyChannel";
 
 const BLOCK_LABELS: Record<string, string> = {
-  A: "Role summary",
-  B: "Fit analysis",
-  C: "Compensation",
-  D: "Culture & team",
-  E: "Risks",
-  F: "Recommendation",
+  // Keep in sync with automation/eval/prompts/evaluate_v1.txt
+  A: "Role summary & fit",
+  B: "Requirements match",
+  C: "Compensation & logistics",
+  D: "Risks & gaps",
+  E: "Application strategy",
+  F: "Interview angles",
   G: "Legitimacy",
 };
 
@@ -39,8 +40,10 @@ interface JobDetailModalProps {
   onEvaluate: () => void;
   onApprove?: () => void;
   onSkip?: () => void;
+  onMarkApplied?: () => void;
   isApproving?: boolean;
   isSkipping?: boolean;
+  isMarkingApplied?: boolean;
   onApplyAssist?: () => void;
   isApplyAssisting?: boolean;
   applyAssistReport?: import("@/src/types/job").ApplyAssistReport | null;
@@ -67,8 +70,10 @@ export default function JobDetailModal({
   onEvaluate,
   onApprove,
   onSkip,
+  onMarkApplied,
   isApproving,
   isSkipping,
+  isMarkingApplied,
   onApplyAssist,
   isApplyAssisting,
   applyAssistReport,
@@ -89,18 +94,22 @@ export default function JobDetailModal({
   const explain = evalResult?.explain || asExplain(explainProp);
   const company = evalResult?.company || explain?.company || job?.company || "—";
   const role = evalResult?.role || explain?.role || job?.title || "—";
-  const rawScore =
+  const evalScore =
     evalResult?.score ??
     explain?.eval_score ??
-    (job?.eval_score != null
-      ? job.eval_score
-      : job && job.fit_score > 0
-        ? job.fit_score / 10
-        : null);
-  const score = rawScore != null ? Math.min(5, Number(rawScore)) : null;
+    (job?.eval_score != null ? job.eval_score : null);
+  const discoveryFit = job && job.fit_score > 0 ? job.fit_score : null;
+  const score =
+    evalScore != null
+      ? Math.min(5, Number(evalScore))
+      : null;
   const legitimacy = evalResult?.legitimacy || explain?.legitimacy || job?.legitimacy;
   const blocks = evalResult?.blocks || job?.eval_blocks || {};
   const bullets = explain?.bullets || [];
+  const linkOnly = isLinkOnlyJob(job);
+  const canMarkApplied =
+    Boolean(onMarkApplied) &&
+    (job?.pipeline_status === "approved" || job?.pipeline_status === "evaluated");
 
   return (
     <>
@@ -143,13 +152,39 @@ export default function JobDetailModal({
           )}
 
           <div className="flex flex-wrap items-center gap-3">
-            <Badge variant="score">{score != null ? `${score.toFixed(1)}/5` : "Not evaluated"}</Badge>
+            <Badge variant="score">
+              {score != null
+                ? `${score.toFixed(1)}/5`
+                : discoveryFit != null
+                  ? `Discovery ${Math.round(discoveryFit)}/100`
+                  : "Not evaluated"}
+            </Badge>
+            {score != null && discoveryFit != null && (
+              <Badge variant="default">Discovery {Math.round(discoveryFit)}/100</Badge>
+            )}
             {(evalResult?.template_only || job?.eval_template_only) && (
               <Badge variant="orange">Template mode</Badge>
             )}
             {legitimacy && <Badge variant="lime">{legitimacy}</Badge>}
             {job?.source && <Badge variant="default">{job.source}</Badge>}
+            {linkOnly && <Badge variant="default">Open posting only</Badge>}
           </div>
+
+          {linkOnly && (
+            <div className="rounded-2xl border border-mist bg-sage/30 p-4 text-sm text-ink">
+              This is a job-board listing (LinkedIn/Naukri and similar) — there is no form to
+              prefill. Open the posting and apply on the board, or find the employer ATS link.
+            </div>
+          )}
+
+          {!isLoading && score == null && (
+            <div className="rounded-2xl border border-orange/30 bg-orange/10 p-4 text-sm text-ink">
+              <strong>Not evaluated yet.</strong> Run Evaluate to fetch the job description and
+              build A–G fit blocks
+              {discoveryFit != null ? ` (discovery fit is ${Math.round(discoveryFit)}/100)` : ""}.
+              Approve still works, but Prefill/prep are stronger after evaluation.
+            </div>
+          )}
 
           {job && (job.salary || job.experience || (job.skills && job.skills.length > 0)) && (
             <div className="space-y-2 rounded-2xl border border-mist bg-sage/20 p-4">
@@ -280,8 +315,9 @@ export default function JobDetailModal({
 
           {!isLoading && !evalResult && bullets.length === 0 && Object.keys(blocks).length === 0 && (
             <p className="text-sm text-stone">
-              {job?.fit_reason ||
-                "No evaluation yet. Run evaluation to resolve company/role from the job URL and generate scores."}
+              {job?.fit_reason && !/jd not fetched|preferred location|^title match/i.test(job.fit_reason)
+                ? job.fit_reason
+                : "No evaluation yet. Run Evaluate to resolve company/role from the job URL and generate scores."}
             </p>
           )}
 
@@ -312,13 +348,23 @@ export default function JobDetailModal({
           <Button variant="lime" onClick={onEvaluate} isLoading={isEvaluating}>
             {score != null ? "Re-evaluate" : "Evaluate"}
           </Button>
-          {onApprove && (
+          {onApprove && job?.pipeline_status !== "approved" && job?.pipeline_status !== "submitted" && (
             <Button variant="primary" onClick={onApprove} isLoading={isApproving} disabled={isApproving || isSkipping}>
               Approve
             </Button>
           )}
+          {canMarkApplied && (
+            <Button
+              variant="secondary"
+              onClick={onMarkApplied}
+              isLoading={isMarkingApplied}
+              disabled={isMarkingApplied}
+            >
+              Mark applied
+            </Button>
+          )}
           {onApplyAssist &&
-            !isLinkOnlyJob(job) &&
+            !linkOnly &&
             (job?.pipeline_status === "approved" || job?.pipeline_status === "evaluated") && (
               <Button variant="secondary" onClick={onApplyAssist} isLoading={isApplyAssisting}>
                 Fill form
@@ -336,7 +382,7 @@ export default function JobDetailModal({
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center gap-2 rounded-2xl border border-mist bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-all hover:bg-sage/50 active:scale-95"
             >
-              {isLinkOnlyJob(job) ? "Open posting" : "Open"} <ExternalLink size={14} />
+              {linkOnly ? "Open posting" : "Open"} <ExternalLink size={14} />
             </a>
           )}
         </div>

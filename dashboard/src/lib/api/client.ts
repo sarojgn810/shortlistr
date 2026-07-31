@@ -597,6 +597,22 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ body }),
     }),
+  savePrepReachOutContacts: (
+    jobId: string,
+    contacts: import("@/src/types/job").ReachOutContact[]
+  ) =>
+    request<{ saved: boolean; job_id: string; count: number }>(
+      `/jobs/${jobId}/prep/reach-out/contacts`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ contacts }),
+      }
+    ),
+  savePrepOutreachDraft: (jobId: string, body: string) =>
+    request<{ saved: boolean; job_id: string }>(`/jobs/${jobId}/prep/reach-out/outreach`, {
+      method: "PATCH",
+      body: JSON.stringify({ body }),
+    }),
   getTrackerBoard: (relevance: "relevant" | "all" = "relevant") =>
     request<import("@/src/types/job").TrackerBoard>(`/tracker/board?relevance=${relevance}`),
   listCvTemplates: () => request<{ templates: CvTemplate[] }>("/cv/templates"),

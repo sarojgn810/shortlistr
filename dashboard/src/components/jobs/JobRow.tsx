@@ -18,7 +18,7 @@ function scoreLabel(job: Job): string {
     return Math.min(5, job.eval_score).toFixed(1);
   }
   if (job.fit_score > 0) {
-    return Math.min(5, job.fit_score / 10).toFixed(1);
+    return Math.min(5, job.fit_score / 20).toFixed(1);
   }
   return "—";
 }

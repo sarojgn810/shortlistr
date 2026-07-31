@@ -170,3 +170,33 @@ def set_prep_cover_draft(job_id: str, body: str, tenant_id: str = "default") -> 
     drafts = get_prep_drafts(tenant_id)
     drafts[job_id] = body.strip()
     _set_json(tenant_id, "prep_drafts", drafts)
+
+
+def get_prep_reach_out(tenant_id: str = "default") -> dict[str, Any]:
+    """Per-job Reach out drafts: {job_id: {contacts: [...], outreach_draft: str}}."""
+    raw = _get_json(tenant_id, "prep_reach_out", {})
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for k, v in raw.items():
+        if isinstance(v, dict):
+            out[str(k)] = v
+    return out
+
+
+def set_prep_reach_out_entry(
+    job_id: str,
+    *,
+    contacts: list | None = None,
+    outreach_draft: str | None = None,
+    tenant_id: str = "default",
+) -> dict[str, Any]:
+    data = get_prep_reach_out(tenant_id)
+    entry = dict(data.get(job_id) or {})
+    if contacts is not None:
+        entry["contacts"] = list(contacts)
+    if outreach_draft is not None:
+        entry["outreach_draft"] = outreach_draft.strip()
+    data[job_id] = entry
+    _set_json(tenant_id, "prep_reach_out", data)
+    return entry

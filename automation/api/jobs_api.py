@@ -40,14 +40,39 @@ _LIST_JOB_COLUMNS = """
 def apply_channel_for(job: dict) -> str:
     """How this job gets applied to: email | link (board listing) | form (ATS) | manual."""
     from apply.channels import is_link_only
+    from urllib.parse import urlparse
 
+    url = (job.get("url") or "").strip()
+    source = str(job.get("source") or "")
+    # Boards first — a LinkedIn URL is never an email/form path even if we
+    # somehow have a company_email on the row.
+    if is_link_only(url, source):
+        return "link"
+    if not url:
+        return "manual" if not (job.get("company_email") or "").strip() else "email"
+
+    host = urlparse(url).netloc.lower()
+    if host.startswith("www."):
+        host = host[4:]
+    ats_hints = (
+        "greenhouse.io",
+        "lever.co",
+        "myworkdayjobs.com",
+        "workdayjobs.com",
+        "ashbyhq.com",
+        "bamboohr.com",
+        "smartrecruiters.com",
+        "jobvite.com",
+        "icims.com",
+        "successfactors",
+        "taleo",
+        "apply.workable.com",
+        "jobs.jobvite.com",
+    )
+    if any(h in host for h in ats_hints):
+        return "form"
     if (job.get("company_email") or "").strip():
         return "email"
-    url = (job.get("url") or "").strip()
-    if not url:
-        return "manual"
-    if is_link_only(url, str(job.get("source") or "")):
-        return "link"
     return "form"
 
 

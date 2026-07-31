@@ -11,14 +11,37 @@ from store.status import validate_job_id
 
 _BULLET_SPLIT = re.compile(r"[\n;•]+|(?<=\.)\s+")
 
+# Discovery fit_reason often dumps scorer tokens that are noise in the drawer.
+_NOISE_BULLET = re.compile(
+    r"^(?:"
+    r"jd not fetched yet|"
+    r"preferred location|"
+    r"title match|"
+    r"location match|"
+    r"remote ok|"
+    r"keyword match|"
+    r"fit score|"
+    r"unknown"
+    r")\.?$",
+    re.I,
+)
+
 
 def _bullets_from_text(text: str, *, max_items: int = 5) -> list[str]:
     if not text or not text.strip():
         return []
     parts = [p.strip(" -•\t") for p in _BULLET_SPLIT.split(text.strip()) if p.strip()]
-    # Drop very short fragments
-    parts = [p for p in parts if len(p) > 12]
+    parts = [p for p in parts if len(p) > 12 and not _NOISE_BULLET.match(p)]
     return parts[:max_items]
+
+
+def _is_useful_bullet(text: str) -> bool:
+    t = (text or "").strip()
+    if len(t) < 16:
+        return False
+    if _NOISE_BULLET.match(t):
+        return False
+    return True
 
 
 def _latest_eval(conn, job_id: str) -> dict | None:
@@ -62,6 +85,12 @@ def explain_job(job_id: str) -> dict[str, Any]:
     blocks = {}
     if eval_row and eval_row.get("result"):
         blocks = dict(eval_row["result"].get("blocks") or {})
+        try:
+            from writing.sanitize import sanitize_blocks
+
+            blocks = sanitize_blocks(blocks, mode="prose")
+        except Exception:
+            pass
 
     bullets: list[str] = []
     if blocks.get("B"):
@@ -70,11 +99,33 @@ def explain_job(job_id: str) -> dict[str, Any]:
         bullets.extend(_bullets_from_text(fit_reason, max_items=3))
     if blocks.get("A") and len(bullets) < 5:
         bullets.extend(_bullets_from_text(str(blocks["A"]), max_items=2))
+    if blocks.get("D") and len(bullets) < 5:
+        bullets.extend(_bullets_from_text(str(blocks["D"]), max_items=1))
+
+    # Concrete fallbacks when discovery left only scorer tokens.
+    if not bullets:
+        company = (job.get("company") or "").strip()
+        title = (job.get("title") or "").strip()
+        location = (job.get("location") or "").strip()
+        if title and company:
+            bullets.append(f"Title matches your search: {title} at {company}.")
+        elif title:
+            bullets.append(f"Title matches your search: {title}.")
+        if location:
+            bullets.append(f"Location: {location}.")
+        if fit_score > 0:
+            bullets.append(f"Discovery fit {fit_score}/100 — run Evaluate for a full A–G score.")
+        if not (job.get("jd_text") or "").strip():
+            bullets.append("Job description not loaded yet — Evaluate fetches the posting text.")
 
     # Dedupe while preserving order
     seen: set[str] = set()
     unique_bullets: list[str] = []
     for b in bullets:
+        if not _is_useful_bullet(b) and "Discovery fit" not in b and "not loaded" not in b:
+            # Keep our explicit fallbacks even if short-ish.
+            if not b.startswith("Title matches") and not b.startswith("Location:"):
+                continue
         key = b.lower()[:80]
         if key not in seen:
             seen.add(key)
@@ -87,7 +138,9 @@ def explain_job(job_id: str) -> dict[str, Any]:
     except Exception:
         pass
 
-    primary_score = eval_score if eval_score is not None else round(fit_score / 20.0, 1)
+    primary_score = eval_score if eval_score is not None else (
+        round(fit_score / 20.0, 1) if fit_score > 0 else 0.0
+    )
 
     summary_parts = []
     if eval_score is not None:
@@ -95,6 +148,8 @@ def explain_job(job_id: str) -> dict[str, Any]:
     if fit_score:
         summary_parts.append(f"discovery fit {fit_score}/100")
     summary_parts.append(f"legitimacy: {legitimacy}")
+    if not (job.get("jd_text") or "").strip() and eval_score is None:
+        summary_parts.append("JD not loaded — Evaluate to fetch")
     summary = " · ".join(summary_parts)
     try:
         from writing.sanitize import sanitize
@@ -113,6 +168,7 @@ def explain_job(job_id: str) -> dict[str, Any]:
         "fit_score": fit_score,
         "legitimacy": legitimacy,
         "pipeline_status": dict(pipe)["status"] if pipe else None,
+        "has_jd": bool((job.get("jd_text") or "").strip()),
         "bullets": unique_bullets,
         "summary": summary,
         "recommend_apply": eval_score is not None and eval_score >= 4.0,

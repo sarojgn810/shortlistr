@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/src/components/ui/Button";
 import { Skeleton } from "@/src/components/ui/Skeleton";
 import { PrepGuide } from "@/src/components/prep/PrepGuide";
+import { ReachOutSection } from "@/src/components/prep/ReachOutSection";
 import { api, ApiError } from "@/src/lib/api/client";
 import { isLinkOnlyJob } from "@/src/lib/applyChannel";
 import type { PrepBundle, ResumeDiff } from "@/src/types/job";
@@ -228,10 +229,19 @@ export function PrepDetailPanel({
         </section>
 
         <section className="space-y-5">
+          {bundle.reach_out && (
+            <ReachOutSection
+              jobId={jobId}
+              reachOut={bundle.reach_out}
+              onUpdated={onUpdated}
+            />
+          )}
+
           <div className="rounded-2xl border border-mist bg-sage/20 p-5 text-base text-stone">
             <p className="font-bold text-ink">Next steps</p>
             <ol className="mt-3 list-decimal space-y-2 pl-5">
               <li>Review cover letter and edit if needed</li>
+              <li>Reach out via LinkedIn or email when you have a contact</li>
               {linkOnly ? (
                 <>
                   <li>Open the posting on the job board and apply there</li>

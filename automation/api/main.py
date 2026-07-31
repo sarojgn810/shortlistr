@@ -176,6 +176,23 @@ class PrepCoverLetterBody(BaseModel):
     body: str
 
 
+class PrepReachOutContact(BaseModel):
+    id: str | None = None
+    name: str = ""
+    title: str = ""
+    email: str = ""
+    linkedin_url: str = ""
+    note: str = ""
+
+
+class PrepReachOutContactsBody(BaseModel):
+    contacts: list[PrepReachOutContact] = []
+
+
+class PrepOutreachDraftBody(BaseModel):
+    body: str
+
+
 def _auth(authorization: Optional[str] = Header(None)) -> dict:
     if not API_TOKEN and not os.environ.get("SHORTLISTR_JWT_SECRET"):
         return {"sub": "anonymous", "tenant_id": "default", "role": "owner"}
@@ -1274,6 +1291,60 @@ def create_app():
                 tenant_id=user.get("tenant_id", "default"),
             )
             store.audit("prep_cover_saved", "job", job_id, {"actor": user.get("sub")})
+            return {"saved": True, "job_id": job_id}
+        except StatusError as e:
+            raise HTTPException(400, str(e))
+
+    @app.patch("/jobs/{job_id}/prep/reach-out/contacts")
+    def job_prep_reach_out_contacts(
+        job_id: str,
+        body: PrepReachOutContactsBody,
+        user: dict = Depends(_auth),
+    ):
+        """Save user-added Reach out contacts (merged with JD extracts on read)."""
+        from prep.reach_out import normalize_user_contact
+        from store.prep_drafts import save_reach_out_contacts
+        from store.status import StatusError, validate_job_id
+
+        try:
+            validate_job_id(job_id)
+            contacts = []
+            for raw in body.contacts:
+                n = normalize_user_contact(raw.model_dump())
+                if n:
+                    contacts.append(n)
+            save_reach_out_contacts(
+                job_id,
+                contacts,
+                tenant_id=user.get("tenant_id", "default"),
+            )
+            store.audit(
+                "prep_reach_out_contacts_saved",
+                "job",
+                job_id,
+                {"actor": user.get("sub"), "count": len(contacts)},
+            )
+            return {"saved": True, "job_id": job_id, "count": len(contacts)}
+        except StatusError as e:
+            raise HTTPException(400, str(e))
+
+    @app.patch("/jobs/{job_id}/prep/reach-out/outreach")
+    def job_prep_outreach_draft(
+        job_id: str,
+        body: PrepOutreachDraftBody,
+        user: dict = Depends(_auth),
+    ):
+        from store.prep_drafts import save_outreach_draft
+        from store.status import StatusError, validate_job_id
+
+        try:
+            validate_job_id(job_id)
+            save_outreach_draft(
+                job_id,
+                body.body,
+                tenant_id=user.get("tenant_id", "default"),
+            )
+            store.audit("prep_outreach_saved", "job", job_id, {"actor": user.get("sub")})
             return {"saved": True, "job_id": job_id}
         except StatusError as e:
             raise HTTPException(400, str(e))

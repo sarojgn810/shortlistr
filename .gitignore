@@ -68,7 +68,10 @@ htmlcov/
 # ── Generated runtime outputs ─────────────────────────────────────────────────
 data/*.json
 data/apply_queue.md
+data/autojob.db
 data/shortlistr.db
+data/*.db
+!data/.gitkeep
 data/cache/
 data/source_circuits.json
 *.shortlistr

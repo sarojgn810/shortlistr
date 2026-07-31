@@ -77,11 +77,21 @@ def test_job_board_listings_are_link_only():
     assert apply_channel_for({"url": "https://www.naukri.com/job-listings-abc"}) == "link"
     assert apply_channel_for({"url": "https://x", "source": "LinkedIn Guest"}) == "link"
     assert apply_channel_for({"url": "https://boards.greenhouse.io/acme/jobs/1"}) == "form"
+    # ATS hosts stay form even when a company_email is also present.
+    assert (
+        apply_channel_for(
+            {
+                "url": "https://boards.greenhouse.io/acme/jobs/2",
+                "company_email": "jobs@acme.com",
+            }
+        )
+        == "form"
+    )
 
-    # An employer email still beats the board listing.
+    # Board listings stay link-only — email on the row does not unlock Prefill.
     assert (
         apply_channel_for({"url": "https://in.indeed.com/x", "company_email": "jobs@acme.com"})
-        == "email"
+        == "link"
     )
 
     assert is_link_only("https://in.indeed.com/viewjob?jk=1")

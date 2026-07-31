@@ -158,6 +158,16 @@ def get_prep_bundle(job_id: str, *, generate: bool = False) -> dict[str, Any]:
         except Exception:
             pass
 
+    from prep.reach_out import build_reach_out
+    from store.prep_drafts import get_reach_out_saved
+
+    saved_ro = get_reach_out_saved(jid)
+    bundle["reach_out"] = build_reach_out(
+        job_row,
+        user_contacts=saved_ro.get("contacts") or [],
+        outreach_draft=saved_ro.get("outreach_draft") or None,
+    )
+
     return bundle
 
 
