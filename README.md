@@ -25,16 +25,11 @@ Discover → Evaluate → Approve → Prep → Prefill → You click Submit
 
 ## Requirements
 
-| Tool | Version |
-|------|---------|
-| Python | 3.10+ |
-| Node.js | 18+ |
-| Playwright Chromium | installed automatically by `make start` |
-
-```bash
-# macOS
-brew install python@3.12 node
-```
+| Tool | Version | Notes |
+|------|---------|-------|
+| Python | 3.10+ | Required up front (`python -m automation.cli start`) |
+| Node.js | 18+ | **Auto-installed** by `make start` if missing |
+| Playwright Chromium | — | Installed by `make start` |
 
 ---
 
@@ -53,11 +48,12 @@ python -m automation.cli start
 
 **What `start` does**
 
-1. Checks Python 3.10+ and Node 18+
-2. Installs Python packages, Playwright Chromium, and dashboard deps
-3. Seeds local placeholders (`cv.md`, `portals.yml`, `.env`, SQLite)
-4. Starts API (`http://127.0.0.1:8787`) and dashboard (`http://localhost:3000`)
-5. Opens **http://localhost:3000/onboarding**
+1. Checks **Python 3.10+** (must already be installed — you are running it)
+2. **Installs Node.js automatically** if missing (Homebrew / winget, or a portable copy under `.tools/`)
+3. Installs Python packages, Playwright Chromium, and dashboard deps
+4. Seeds local placeholders (`cv.md`, `portals.yml`, `.env`, SQLite)
+5. Starts API (`http://127.0.0.1:8787`) and dashboard (`http://localhost:3000`)
+6. Opens **http://localhost:3000/onboarding**
 
 Then finish the wizard: upload résumé → confirm titles/locations → scan.
 

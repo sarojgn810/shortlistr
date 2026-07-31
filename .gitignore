@@ -54,6 +54,9 @@ dashboard/tsconfig.tsbuildinfo
 shortlistr-dashboard
 .pytest_cache/
 
+# Portable Node (auto-installed by `make start` when system Node is missing)
+.tools/
+
 # ── Personal files (repo root) ───────────────────────────────────────────────
 *.pdf
 *.docx

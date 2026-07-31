@@ -54,34 +54,12 @@ def _npm_argv(*args: str) -> list[str]:
 
 # ── prerequisites ──────────────────────────────────────────────────────────────
 
-def check_prereqs() -> bool:
-    ok = True
-    if sys.version_info < MIN_PYTHON:
-        _log(f"  [x] Python {MIN_PYTHON[0]}.{MIN_PYTHON[1]}+ required "
-             f"(found {sys.version_info.major}.{sys.version_info.minor}). Get it from python.org.")
-        ok = False
-    else:
-        _log(f"  [ok] Python {sys.version_info.major}.{sys.version_info.minor}")
+def check_prereqs(*, auto_install_node: bool = True) -> bool:
+    """Verify Python; auto-install Node/npm when missing so ``start`` is one command."""
+    from bootstrap.ensure_runtime import ensure_node, ensure_python
 
-    node = shutil.which("node")
-    if not node:
-        _log("  [x] Node.js not found. Install Node 18+ from nodejs.org.")
-        ok = False
-    else:
-        try:
-            out = subprocess.run([node, "-v"], capture_output=True, text=True,
-                                 timeout=10).stdout.strip()
-            major = int(out.lstrip("v").split(".")[0])
-            if major < MIN_NODE:
-                _log(f"  [x] Node {MIN_NODE}+ required (found {out}). Update from nodejs.org.")
-                ok = False
-            else:
-                _log(f"  [ok] Node {out}")
-        except Exception:
-            _log("  [!] Could not read Node version; continuing.")
-
-    if not (shutil.which("npm") or (IS_WIN and shutil.which("npm.cmd"))):
-        _log("  [x] npm not found (it ships with Node.js).")
+    ok = ensure_python()
+    if not ensure_node(auto_install=auto_install_node):
         ok = False
     return ok
 
@@ -200,7 +178,7 @@ def run(install: bool) -> int:
     _log("Shortlistr launcher")
     _log("")
     _log("Checking prerequisites…")
-    if not check_prereqs():
+    if not check_prereqs(auto_install_node=install):
         _log("\nFix the items marked [x] above and re-run.")
         return 1
 

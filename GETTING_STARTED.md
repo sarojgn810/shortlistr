@@ -10,13 +10,20 @@ This guide takes you from a fresh clone to your first reviewed job.
 
 ## 1. Install (one time)
 
+You need **Python 3.10+** installed first (the launcher runs under Python).
+
+**Node.js is installed automatically** by `make start` / `python -m automation.cli start`
+if it is missing (Homebrew or winget when available, otherwise a portable copy under
+`.tools/`). You can also install Node 18+ yourself from [nodejs.org](https://nodejs.org).
+
 ```bash
-make install          # Python deps + Playwright/Chromium (used for PDF + form-fill)
-make dashboard-install # dashboard (Next.js) deps
+make start            # preferred: install everything + open onboarding
+# or, if you prefer the split path:
+make install          # Python deps + Playwright Chromium
+make dashboard-install # dashboard (Next.js) deps — needs Node/npm
 ```
 
-You need Python 3.10+ and Node 18+. No LaTeX/MacTeX required — PDFs render through
-Chromium.
+No LaTeX/MacTeX required — PDFs render through Chromium.
 
 ---
 
