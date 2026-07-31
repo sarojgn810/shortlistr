@@ -53,7 +53,8 @@ class CvPreviewBody(BaseModel):
     template_id: str = "ats-single"
     markdown: str | None = None
     use_sample: bool = False
-    single_page: bool = True
+    # False: readable type, paginate when long. True: try one page first.
+    single_page: bool = False
 
 
 def _allowed_cv_path(path: str) -> bool:

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { cn } from "@/src/lib/utils/cn";
 
 interface CvHtmlPreviewProps {
@@ -7,17 +8,41 @@ interface CvHtmlPreviewProps {
   loading?: boolean;
   className?: string;
   emptyMessage?: string;
+  /** Hint from page target: auto/2 allow a taller scrollable frame. */
+  allowMultiPage?: boolean;
 }
 
 /** A4 aspect ratio: 210 × 297 mm */
-const A4_CLASS = "aspect-[210/297] w-full max-w-[520px]";
+const A4_CLASS = "aspect-[210/297] w-full max-w-[560px]";
 
 export function CvHtmlPreview({
   html,
   loading = false,
   className,
   emptyMessage = "Select a template to preview your resume.",
+  allowMultiPage = true,
 }: CvHtmlPreviewProps) {
+  const [pages, setPages] = useState(1);
+
+  useEffect(() => {
+    setPages(1);
+    if (!html || !allowMultiPage) return;
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (
+        data &&
+        typeof data === "object" &&
+        data.type === "cv-preview-pages" &&
+        typeof data.pages === "number" &&
+        data.pages >= 1
+      ) {
+        setPages(Math.min(4, Math.max(1, Math.round(data.pages))));
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [html, allowMultiPage]);
+
   if (loading) {
     return (
       <div
@@ -48,6 +73,19 @@ export function CvHtmlPreview({
     );
   }
 
+  const multi = allowMultiPage && pages > 1;
+  // iframe height follows reported page count so page 2 is visible without
+  // clipping; max height keeps the dashboard usable on short screens.
+  const frameClass = multi
+    ? "w-full max-w-[560px] overflow-auto border-0 bg-transparent shadow-lg"
+    : cn(A4_CLASS, "max-h-[min(80vh,720px)] border-0 bg-transparent shadow-lg");
+  const frameStyle = multi
+    ? {
+        height: `min(${Math.round(pages * 72)}vh, ${pages * 640}px)`,
+        maxHeight: "min(92vh, 1400px)",
+      }
+    : undefined;
+
   return (
     <div
       className={cn(
@@ -58,16 +96,10 @@ export function CvHtmlPreview({
       <iframe
         title="Resume preview (A4)"
         srcDoc={html}
-        className={cn(
-          A4_CLASS,
-          "max-h-[min(80vh,720px)] border-0 bg-transparent shadow-lg"
-        )}
-        // allow-scripts only. The preview runs one script that measures and
-        // shrinks its own content to fit the sheet; it never reaches the parent
-        // document, storage or the network. Granting allow-same-origin as well
-        // let the frame remove its own sandbox, which is what Chrome warns about
-        // ("An iframe which has both allow-scripts and allow-same-origin ... can
-        // escape its sandboxing") once per render.
+        style={frameStyle}
+        className={frameClass}
+        // allow-scripts only. The preview measures itself and may postMessage
+        // page count to the parent; it never reaches storage or the network.
         sandbox="allow-scripts"
       />
     </div>

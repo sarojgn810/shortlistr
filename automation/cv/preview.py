@@ -1,4 +1,11 @@
-"""HTML resume preview — A4 single page with auto-fit and per-template layouts."""
+"""HTML resume preview — A4 pages that scale to the iframe and paginate.
+
+The preview used to draw a fixed ``210mm`` sheet inside a ~520px iframe, so
+type looked oversized and long CVs were clipped (``overflow: hidden``) instead
+of flowing onto page two. Sheets are now viewport-width, typography is
+relative to that width, and content that will not fit one page at a readable
+size becomes a second (or third) A4 sheet.
+"""
 
 from __future__ import annotations
 
@@ -14,139 +21,174 @@ SAMPLE_CV = DEMO_SAMPLE_CV
 
 _BASE_CSS = """
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; }
-  body {
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  html, body {
+    width: 100%;
+    min-height: 100%;
     background: #d4d4d8;
+  }
+  body {
+    /* Scale type to the iframe width so A4 always fills the frame. */
+    font-size: calc(100vw / 52);
+    font-family: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
     display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 12px;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.55em;
+    padding: 0.55em;
+    color: #1f2937;
+  }
+  .a4-stack {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.55em;
   }
   .a4-sheet {
-    width: 210mm;
-    height: 297mm;
+    /* Full iframe width; height follows the A4 ratio (210×297). */
+    width: 100%;
+    height: calc(100vw * 297 / 210);
     background: #fff;
-    box-shadow: 0 4px 24px rgba(0,0,0,.15);
+    box-shadow: 0 0.2em 1em rgba(0,0,0,.14);
     overflow: hidden;
     position: relative;
+    padding: 5.5% 6%;
+  }
+  body.force-multi .a4-sheet,
+  body.allow-multi .a4-sheet {
+    /* Continuous multi-page stack uses one growing sheet + page rules. */
+  }
+  .a4-sheet.is-flow {
+    height: auto;
+    min-height: calc(100vw * 297 / 210);
+    overflow: visible;
+    /* Visual page breaks every A4 height. */
+    background-color: #fff;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      #fff 0,
+      #fff calc(100vw * 297 / 210 - 1px),
+      #94a3b8 calc(100vw * 297 / 210 - 1px),
+      #94a3b8 calc(100vw * 297 / 210)
+    );
   }
   .cv-fit-root {
     transform-origin: top left;
     width: 100%;
-    height: 100%;
     color: #1f2937;
     --accent: #1d4ed8;
   }
   .cv-name {
-    font-size: 1.7rem;
-    font-weight: 800;
-    line-height: 1.1;
+    font-size: 1.45em;
+    font-weight: 700;
+    line-height: 1.15;
     letter-spacing: -0.01em;
-    margin-bottom: 0.28rem;
+    margin-bottom: 0.22em;
     color: #0f172a;
   }
   .cv-contact {
-    font-size: 0.7rem;
+    font-size: 0.72em;
     color: #475569;
-    line-height: 1.45;
+    line-height: 1.4;
   }
   .cv-headline {
-    font-size: 0.78rem;
+    font-size: 0.78em;
     font-style: italic;
     color: #334155;
-    margin-bottom: 0.15rem;
+    margin-bottom: 0.12em;
   }
   .cv-contact-line { margin: 0; }
-  .cv-section { margin-bottom: 0.6rem; }
+  .cv-section { margin-bottom: 0.55em; }
   .cv-section h2 {
-    font-size: 0.64rem;
-    font-weight: 800;
+    font-size: 0.68em;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.13em;
-    margin: 0 0 0.32rem;
-    padding-bottom: 0.12rem;
+    letter-spacing: 0.12em;
+    margin: 0 0 0.28em;
+    padding-bottom: 0.1em;
     color: var(--accent);
     border-bottom: 1.5px solid #e2e8f0;
   }
   .cv-section-body {
-    font-size: 0.72rem;
-    line-height: 1.4;
+    font-size: 0.74em;
+    line-height: 1.35;
     color: #334155;
   }
   .cv-section-body h4 {
-    font-size: 0.74rem;
+    font-size: 1.02em;
     font-weight: 700;
-    margin: 0.36rem 0 0.1rem;
+    margin: 0.32em 0 0.08em;
     color: #0f172a;
   }
-  .cv-section-body h4 + p { color: #64748b; font-size: 0.68rem; }
-  /* Role on the left, dates flush right — the same shape the LaTeX entry
-     macro draws, so switching between the two previews is not a jump cut. */
+  .cv-section-body h4 + p { color: #64748b; font-size: 0.94em; }
   .cv-entry {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    gap: 0.6rem;
-    margin: 0.36rem 0 0.06rem;
+    gap: 0.55em;
+    margin: 0.32em 0 0.05em;
   }
-  .cv-what { font-size: 0.74rem; font-weight: 700; color: #0f172a; }
-  .cv-when { font-size: 0.66rem; color: #64748b; white-space: nowrap; }
+  .cv-what { font-size: 1.02em; font-weight: 700; color: #0f172a; }
+  .cv-when { font-size: 0.92em; color: #64748b; white-space: nowrap; }
   .cv-entry-meta {
-    font-size: 0.68rem;
+    font-size: 0.94em;
     font-style: italic;
     color: #64748b;
-    margin-bottom: 0.08rem;
+    margin-bottom: 0.06em;
   }
   .cv-section-body ul {
-    margin: 0.12rem 0 0.18rem;
-    padding-left: 1.05rem;
+    margin: 0.1em 0 0.16em;
+    padding-left: 1.15em;
     list-style-type: disc;
   }
-  .cv-section-body li { margin-bottom: 0.1rem; }
-  .cv-section-body p { margin: 0.08rem 0; }
+  .cv-section-body li { margin-bottom: 0.08em; }
+  .cv-section-body p { margin: 0.06em 0; }
   strong { font-weight: 700; color: #0f172a; }
-  .cv-multi-page-hint {
-    display: none;
+  .cv-page-label {
     position: absolute;
-    bottom: 4mm;
-    right: 6mm;
-    font-size: 7pt;
-    color: #888;
+    bottom: 2.2%;
+    right: 4%;
+    font-size: 0.55em;
+    color: #94a3b8;
+    letter-spacing: 0.04em;
   }
-  body.allow-multi .cv-multi-page-hint { display: block; }
+  .cv-multi-banner {
+    display: none;
+    width: 100%;
+    text-align: center;
+    font-size: 0.65em;
+    color: #64748b;
+    padding: 0 0 0.15em;
+  }
+  body.allow-multi .cv-multi-banner,
+  body.force-multi .cv-multi-banner { display: block; }
 
-  /* Awesome-CV inspired — crimson accents, no filled header band */
-  .layout-awesome .a4-sheet { padding: 9mm 12mm; }
-  .layout-awesome .cv-name { color: #c0392b; font-size: 1.7rem; letter-spacing: 0.01em; }
+  /* Awesome-CV inspired — crimson accents */
+  .layout-awesome .cv-name { color: #c0392b; font-size: 1.4em; letter-spacing: 0.01em; }
   .layout-awesome .cv-header {
-    margin-bottom: 0.55rem;
-    padding-bottom: 0.4rem;
-    border-bottom: 2.5px solid #c0392b;
+    margin-bottom: 0.5em;
+    padding-bottom: 0.35em;
+    border-bottom: 2px solid #c0392b;
   }
   .layout-awesome .cv-section h2 {
     color: #c0392b;
     border-bottom: 1.5px solid #c0392b;
-    padding-bottom: 0.12rem;
-    display: inline-block;
-    width: 100%;
   }
 
-  /* Split Header (was a real sidebar — dropped for ATS reading order) */
-  .layout-sidebar .a4-sheet { padding: 9mm 12mm; }
+  /* Split header */
   .layout-sidebar .cv-header-split {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    gap: 1rem;
-    margin-bottom: 0.5rem;
-    padding-bottom: 0.4rem;
+    gap: 0.9em;
+    margin-bottom: 0.45em;
+    padding-bottom: 0.35em;
     border-bottom: 2px solid #2c3e50;
   }
   .layout-sidebar .cv-header-split .cv-name {
     margin: 0;
     color: #2c3e50;
-    font-size: 1.55rem;
+    font-size: 1.35em;
   }
   .layout-sidebar .cv-header-split .cv-contact {
     text-align: right;
@@ -155,103 +197,197 @@ _BASE_CSS = """
   .layout-sidebar .cv-section h2 { color: #2c3e50; }
 
   /* Reactive-Resume inspired */
-  .layout-reactive .a4-sheet { padding: 9mm 11mm; }
-  .layout-reactive .cv-header { margin-bottom: 0.5rem; }
+  .layout-reactive .cv-header { margin-bottom: 0.45em; }
   .layout-reactive .cv-accent-bar {
     width: 22%;
-    height: 3px;
+    height: 0.18em;
     background: linear-gradient(90deg, #6366f1, #8b5cf6);
     border-radius: 2px;
-    margin: 0.25rem 0 0.4rem;
+    margin: 0.2em 0 0.35em;
   }
   .layout-reactive .cv-section {
     background: #f8fafc;
-    border-radius: 6px;
-    padding: 0.35rem 0.5rem;
+    border-radius: 4px;
+    padding: 0.3em 0.45em;
     border-left: 3px solid #6366f1;
   }
-  .layout-reactive .cv-section h2 { color: #6366f1; margin-bottom: 0.15rem; }
+  .layout-reactive .cv-section h2 { color: #6366f1; margin-bottom: 0.12em; }
 
-  /* ── Per-template visual identity: distinct accent + heading treatment ──── */
-  /* classic-ats — safe navy, clean rule (the reliable default) */
   .tpl-classic-ats .cv-fit-root { --accent: #1e3a5f; }
-
-  /* modern-minimal — monochrome, heavy rule + wide tracking */
   .tpl-modern-minimal .cv-fit-root { --accent: #111827; }
   .tpl-modern-minimal .cv-name { font-weight: 800; letter-spacing: -0.02em; }
-  .tpl-modern-minimal .cv-section h2 { color: #111827; border-bottom: 2px solid #111827; letter-spacing: 0.18em; padding-bottom: 0.14rem; }
-
-  /* tech-compact — monospace, teal, dense */
-  .tpl-tech-compact .cv-fit-root { font-family: "SF Mono", "Consolas", "Roboto Mono", monospace; font-size: 95%; --accent: #0d9488; }
-  .tpl-tech-compact .cv-section { margin-bottom: 0.45rem; }
+  .tpl-modern-minimal .cv-section h2 {
+    color: #111827;
+    border-bottom: 2px solid #111827;
+    letter-spacing: 0.16em;
+  }
+  .tpl-tech-compact .cv-fit-root {
+    font-family: "SF Mono", "Consolas", "Roboto Mono", monospace;
+    font-size: 0.96em;
+    --accent: #0d9488;
+  }
+  .tpl-tech-compact .cv-section { margin-bottom: 0.4em; }
   .tpl-tech-compact .cv-section h2 { color: #0d9488; border-bottom: 1px dashed #99f6e4; }
-
-  /* harvard-ats — centered, traditional serif */
   .tpl-harvard-ats .cv-fit-root { font-family: Georgia, "Times New Roman", serif; --accent: #1f2937; }
   .tpl-harvard-ats .cv-header { text-align: center; }
-  .tpl-harvard-ats .cv-name { text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
-  .tpl-harvard-ats .cv-section h2 { text-align: center; color: #1f2937; border-bottom: 1px solid #9ca3af; letter-spacing: 0.16em; }
-
-  /* executive — charcoal name + amber accent, summary panel */
+  .tpl-harvard-ats .cv-name { text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; font-size: 1.3em; }
+  .tpl-harvard-ats .cv-section h2 {
+    text-align: center;
+    color: #1f2937;
+    border-bottom: 1px solid #9ca3af;
+  }
   .tpl-executive .cv-fit-root { --accent: #b45309; }
-  .tpl-executive .cv-name { color: #1c1917; font-size: 1.9rem; }
+  .tpl-executive .cv-name { color: #1c1917; font-size: 1.5em; }
   .tpl-executive .cv-section h2 { color: #b45309; border-bottom: 2px solid #fcd34d; }
-  .tpl-executive .cv-summary { background: #fef3c7; padding: 0.45rem 0.6rem; border-radius: 4px; border-left: 3px solid #b45309; }
-
-  /* skills-first — sky-blue, boxed skills, keyword-forward */
+  .tpl-executive .cv-summary {
+    background: #fef3c7;
+    padding: 0.4em 0.5em;
+    border-radius: 3px;
+    border-left: 3px solid #b45309;
+  }
   .tpl-skills-first .cv-fit-root { --accent: #0284c7; }
   .tpl-skills-first .cv-section h2 { color: #0284c7; }
-  .tpl-skills-first .cv-skills-block { background: #f0f9ff; padding: 0.4rem 0.55rem; border-radius: 4px; border: 1px solid #bae6fd; }
-
-  /* minimal-plain — pure black, underline headings, zero decoration (strict ATS) */
+  .tpl-skills-first .cv-skills-block {
+    background: #f0f9ff;
+    padding: 0.35em 0.45em;
+    border-radius: 3px;
+    border: 1px solid #bae6fd;
+  }
   .tpl-minimal-plain .cv-fit-root { --accent: #111827; }
-  .tpl-minimal-plain .cv-section h2 { color: #111; border-bottom: none; text-decoration: underline; text-transform: none; letter-spacing: 0; }
-
-  /* professional — teal, soft rule, balanced */
+  .tpl-minimal-plain .cv-section h2 {
+    color: #111;
+    border-bottom: none;
+    text-decoration: underline;
+    text-transform: none;
+    letter-spacing: 0;
+  }
   .tpl-professional .cv-fit-root { --accent: #0f766e; }
   .tpl-professional .cv-section h2 { color: #0f766e; border-bottom: 1.5px solid #99f6e4; }
 
-  /* Print / PDF: drop screen chrome so the A4 sheet fills the page (WYSIWYG). */
   @media print {
     @page { size: A4; margin: 0; }
-    body { padding: 0; background: #fff; display: block; }
-    .a4-sheet { box-shadow: none; margin: 0; width: 210mm; height: 297mm; }
-    .cv-multi-page-hint { display: none; }
+    body { padding: 0; background: #fff; gap: 0; font-size: 11pt; }
+    .a4-sheet {
+      box-shadow: none;
+      width: 210mm;
+      height: 297mm;
+      padding: 12mm 14mm;
+      page-break-after: always;
+    }
+    .a4-sheet.is-flow {
+      height: auto;
+      min-height: 297mm;
+      background-image: none;
+    }
+    .cv-multi-banner, .cv-page-label { display: none !important; }
   }
 """
 
 _FIT_SCRIPT = """
 (function () {
-  function fitOnePage() {
+  var PAGE_FLOOR = 0.88; // never crush type below ~88% when forcing one page
+
+  function pageHeightPx(sheet) {
+    // Prefer the designed A4 ratio over clientHeight (padding included).
+    return sheet.clientWidth * 297 / 210;
+  }
+
+  function contentHeight(root) {
+    return root.scrollHeight;
+  }
+
+  function setFlow(sheet, on) {
+    if (on) sheet.classList.add('is-flow');
+    else sheet.classList.remove('is-flow');
+  }
+
+  function pageCountFor(sheet, root) {
+    var ph = pageHeightPx(sheet);
+    var pad = sheet.clientHeight > 0
+      ? Math.max(0, sheet.clientHeight - (sheet.querySelector('.cv-fit-root') ? 0 : 0))
+      : 0;
+    // Usable content box ≈ sheet height minus vertical padding (~11% total).
+    var usable = ph * 0.89;
+    return Math.max(1, Math.ceil(contentHeight(root) / usable));
+  }
+
+  function updateLabel(sheet, pages) {
+    var label = sheet.querySelector('.cv-page-label');
+    if (!label) return;
+    label.textContent = pages <= 1 ? '1 page' : pages + ' pages';
+  }
+
+  function updateBanner(pages) {
+    var banner = document.querySelector('.cv-multi-banner');
+    if (!banner) return;
+    if (pages <= 1) {
+      banner.style.display = 'none';
+      banner.textContent = '';
+      return;
+    }
+    banner.style.display = 'block';
+    banner.textContent = pages + '-page preview · type stays readable (PDF uses the same page target)';
+  }
+
+  function fit() {
     var sheet = document.querySelector('.a4-sheet');
     var root = document.querySelector('.cv-fit-root');
     if (!sheet || !root) return;
-    var single = document.body.dataset.singlePage !== 'false';
+
+    var preferSingle = document.body.dataset.singlePage === 'true';
     root.style.transform = 'none';
     root.style.width = '100%';
     root.style.fontSize = '100%';
-    if (!single) return;
-    var maxH = sheet.clientHeight;
-    var pct = 100;
-    for (var i = 0; i < 35 && root.scrollHeight > maxH && pct > 72; i++) {
-      pct -= 2;
-      root.style.fontSize = pct + '%';
+    setFlow(sheet, false);
+
+    // Measure at natural size against one A4 page.
+    var ph = pageHeightPx(sheet);
+    sheet.style.height = ph + 'px';
+    var overflows = contentHeight(root) > sheet.clientHeight - 2;
+
+    if (!overflows) {
+      document.body.classList.remove('allow-multi');
+      updateLabel(sheet, 1);
+      updateBanner(1);
+      // Tell parent how tall one page is (optional; sandbox may block).
+      try {
+        parent.postMessage({ type: 'cv-preview-pages', pages: 1 }, '*');
+      } catch (e) {}
+      return;
     }
-    if (root.scrollHeight > maxH) {
-      // Cap the shrink so text never becomes unreadably tiny. A CV that still
-      // overflows at this floor is genuinely too long for one page — trim it, or
-      // render with single_page=false (multi-page).
-      var scale = Math.max(maxH / root.scrollHeight, 0.75);
-      if (scale < 1) {
-        root.style.transform = 'scale(' + scale + ')';
-        root.style.width = (100 / scale) + '%';
+
+    if (preferSingle) {
+      // Tighten a little, but do not go unreadably small.
+      var pct = 100;
+      for (var i = 0; i < 20 && contentHeight(root) > sheet.clientHeight - 2 && pct / 100 > PAGE_FLOOR; i++) {
+        pct -= 2;
+        root.style.fontSize = pct + '%';
       }
+      if (contentHeight(root) <= sheet.clientHeight - 2) {
+        document.body.classList.remove('allow-multi');
+        updateLabel(sheet, 1);
+        updateBanner(1);
+        try { parent.postMessage({ type: 'cv-preview-pages', pages: 1 }, '*'); } catch (e) {}
+        return;
+      }
+      // Still too long for one page at a readable size → fall through to multi.
     }
+
+    // Multi-page: keep readable type, let the sheet grow, show page rules.
+    document.body.classList.add('allow-multi');
+    root.style.fontSize = '100%';
+    setFlow(sheet, true);
+    sheet.style.height = 'auto';
+    var pages = pageCountFor(sheet, root);
+    updateLabel(sheet, pages);
+    updateBanner(pages);
+    try { parent.postMessage({ type: 'cv-preview-pages', pages: pages }, '*'); } catch (e) {}
   }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', fitOnePage);
-  } else { fitOnePage(); }
-  window.addEventListener('resize', fitOnePage);
+    document.addEventListener('DOMContentLoaded', fit);
+  } else { fit(); }
+  window.addEventListener('resize', fit);
 })();
 """
 
@@ -328,9 +464,6 @@ def _collect_sections(sections: CvSections, template_id: str) -> list[tuple[str,
             ("Education", sections.education, ""),
             ("Certifications", sections.certifications, ""),
         ]
-    # Projects became its own field when the LaTeX path needed to render it as
-    # dated entries. Without this line the HTML path silently stopped showing a
-    # section it had always shown.
     if sections.projects.strip():
         ordered.append(("Projects", sections.projects, ""))
     if sections.achievements.strip() and sections.achievements not in sections.experience:
@@ -380,8 +513,6 @@ def _build_inner(md: str, template_id: str) -> str:
         return "".join(_section_html(t, b, extra_class=c) for t, b, c in items)
 
     if family == "awesome":
-        # Crimson name + rule — not the original filled header band. White text
-        # on a colour box is one of the things ATS parsers drop or reorder.
         header = (
             '<header class="cv-header">'
             f'<h1 class="cv-name">{html.escape(name)}</h1>'
@@ -391,9 +522,6 @@ def _build_inner(md: str, template_id: str) -> str:
         return '<div class="cv-fit-root">' + header + render_blocks(blocks) + "</div>"
 
     if family == "sidebar":
-        # Name left / contact right in the header only. A real two-column
-        # sidebar is what the LaTeX path dropped: ATS extractors walk the page
-        # as one stream and interleave the sidebar into the body.
         header = (
             '<header class="cv-header cv-header-split">'
             f'<h1 class="cv-name">{html.escape(name)}</h1>'
@@ -416,8 +544,16 @@ def _build_inner(md: str, template_id: str) -> str:
     return '<div class="cv-fit-root">' + _header_html(name, contact_html) + render_blocks(blocks) + "</div>"
 
 
-def render_cv_html(md: str, template_id: str = "classic-ats", *, single_page: bool = True) -> str:
-    """Render resume as self-contained A4 HTML with auto-fit to one page."""
+def render_cv_html(md: str, template_id: str = "classic-ats", *, single_page: bool = False) -> str:
+    """Render resume as self-contained A4 HTML.
+
+    ``single_page=False`` (default for dashboard preview): keep readable type
+    and grow onto page 2+ when the CV is long.
+
+    ``single_page=True``: try to tighten onto one page first; if it still will
+    not fit above the readable floor, fall back to multi-page rather than
+    clipping or microscopic type.
+    """
     source = (md or "").strip() or SAMPLE_CV
     family = template_family(template_id)
     layout_class = {
@@ -429,11 +565,10 @@ def render_cv_html(md: str, template_id: str = "classic-ats", *, single_page: bo
     sections = parse_cv_markdown(source)
     name = sections.name.strip() or "Your Name"
     inner = _build_inner(source, template_id)
-    body_attr = 'data-single-page="true"' if single_page else 'data-single-page="false" class="allow-multi"'
-    hint = "" if single_page else '<p class="cv-multi-page-hint">Multi-page preview</p>'
-    padding_style = ""
-    if family not in ("awesome", "sidebar"):
-        padding_style = ".a4-sheet { padding: 9mm 11mm; }"
+    body_attr = (
+        'data-single-page="true"' if single_page else 'data-single-page="false"'
+    )
+    extra_body_class = " force-multi" if not single_page else ""
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -441,12 +576,15 @@ def render_cv_html(md: str, template_id: str = "classic-ats", *, single_page: bo
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{html.escape(name)} — CV</title>
-  <style>{_BASE_CSS}{padding_style}</style>
+  <style>{_BASE_CSS}</style>
 </head>
-<body class="{layout_class} {tpl_class}" {body_attr}>
-  <div class="a4-sheet">
-    {inner}
-    {hint}
+<body class="{layout_class} {tpl_class}{extra_body_class}" {body_attr}>
+  <p class="cv-multi-banner" hidden></p>
+  <div class="a4-stack">
+    <div class="a4-sheet">
+      {inner}
+      <span class="cv-page-label">1 page</span>
+    </div>
   </div>
   <script>{_FIT_SCRIPT}</script>
 </body>

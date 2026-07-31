@@ -13,6 +13,15 @@ Template:
 
 ---
 
+## 2026-07-31 — Resume preview paginates instead of crushing type
+**Decision:** HTML CV preview defaults to multi-page when content overflows at
+a readable size. Sheets are viewport-width (not fixed 210mm inside a narrow
+iframe). Length "1 page" may tighten down to ~88% before falling back to page 2.
+**Why:** Fixed-mm sheets looked oversized in the dashboard iframe; single-page
+fit clipped long careers.
+**Touches:** `automation/cv/preview.py`, `CvHtmlPreview.tsx`, `CvWorkspace.tsx`,
+API/client `single_page` default false.
+
 ## 2026-07-31 — Shortlistr résumé templates + Resume page UX
 **Decision:** Keep the 12 single-column LaTeX skins (IDs unchanged for
 settings continuity) but rebrand display names to **Shortlistr …** (Classic,

@@ -654,7 +654,13 @@ export const api = {
     if (!res.ok) throw new ApiError(res.statusText, res.status);
     return URL.createObjectURL(await res.blob());
   },
-  previewCv: (templateId: string, markdown?: string, useSample = false, singlePage = true) =>
+  previewCv: (
+    templateId: string,
+    markdown?: string,
+    useSample = false,
+    /** false = readable type, paginate when long (default). true = try one page. */
+    singlePage = false
+  ) =>
     request<{ html: string; template_id: string }>("/cv/preview", {
       method: "POST",
       body: JSON.stringify({

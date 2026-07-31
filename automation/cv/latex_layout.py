@@ -48,12 +48,12 @@ class Density:
 # Roomiest → densest. Steps are deliberately small: a résumé that only just
 # overflows should lose 2pt of leading, not drop a whole font size.
 DENSITY_LADDER: tuple[Density, ...] = (
-    Density("airy",     "11pt", "1.90cm", "1.60cm", "1.50cm", "1.08", "3.0pt", "7pt", "13pt", "5pt", "{22}{25}", "{9.6}{12}"),
-    Density("relaxed",  "11pt", "1.75cm", "1.45cm", "1.35cm", "1.04", "2.6pt", "6pt", "11pt", "4pt", "{21}{24}", "{9.4}{12}"),
-    Density("normal",   "11pt", "1.60cm", "1.30cm", "1.25cm", "1.00", "2.2pt", "5pt", "10pt", "4pt", "{20}{23}", "{9.2}{11}"),
-    Density("snug",     "10pt", "1.50cm", "1.20cm", "1.15cm", "1.02", "1.8pt", "4pt", "9pt",  "3pt", "{19}{22}", "{9}{11}"),
-    Density("compact",  "10pt", "1.35cm", "1.10cm", "1.05cm", "0.98", "1.4pt", "3pt", "8pt",  "3pt", "{18}{21}", "{8.8}{10.5}"),
-    Density("tight",    "10pt", "1.20cm", "1.00cm", "0.95cm", "0.95", "1.0pt", "2pt", "7pt",  "2pt", "{17}{20}", "{8.6}{10}"),
+    Density("airy",     "11pt", "1.90cm", "1.55cm", "1.45cm", "1.05", "2.8pt", "6pt", "12pt", "5pt", "{18}{21}", "{9}{11}"),
+    Density("relaxed",  "11pt", "1.75cm", "1.40cm", "1.30cm", "1.02", "2.4pt", "5pt", "10pt", "4pt", "{17}{20}", "{8.8}{11}"),
+    Density("normal",   "10pt", "1.55cm", "1.25cm", "1.20cm", "1.00", "2.0pt", "4.5pt", "9pt",  "3.5pt", "{16}{19}", "{8.6}{10.5}"),
+    Density("snug",     "10pt", "1.45cm", "1.15cm", "1.10cm", "0.99", "1.6pt", "3.5pt", "8pt",  "3pt", "{15}{18}", "{8.4}{10}"),
+    Density("compact",  "10pt", "1.30cm", "1.05cm", "1.00cm", "0.97", "1.3pt", "3pt", "7pt",  "2.5pt", "{14.5}{17}", "{8.2}{10}"),
+    Density("tight",    "10pt", "1.15cm", "0.95cm", "0.90cm", "0.95", "1.0pt", "2pt", "6pt",  "2pt", "{14}{16}", "{8}{9.5}"),
 )
 
 DEFAULT_DENSITY = 2  # "normal" — where a fit search starts

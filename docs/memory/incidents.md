@@ -14,6 +14,17 @@ Template:
 
 ---
 
+## 2026-07-31 — Resume HTML preview looked oversized and clipped long CVs
+**Symptom:** Template / Quick preview showed huge type and cut off lengthy
+resumes instead of flowing onto page 2.
+**Root cause:** Preview drew a fixed `210mm` A4 sheet inside a ~520px iframe
+(unscaled), and `single_page=True` + `overflow:hidden` shrunk/clipped instead
+of paginating.
+**Fix:** Viewport-width sheets + relative type; default multi-page when content
+won't fit at a readable size; iframe grows with reported page count; Length
+"1 page" still tries to tighten first.
+**Guard:** `tests/test_cv_preview.py::test_render_prefers_multi_page_by_default`.
+
 ## 2026-07-31 — Résumé prep showed "2 changes" of nonsense
 **Symptom:** Job detail / Prep showed `Résumé prep (2 changes)` with a unified
 diff of `+# Applying for: …` or, after LaTeX CV gen, 100+ lines of TeX source.

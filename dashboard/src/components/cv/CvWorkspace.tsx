@@ -90,7 +90,10 @@ export function CvWorkspace({
       setPreviewLoading(true);
       try {
         const content = (md ?? markdown).trim();
-        const res = await api.previewCv(tpl, content || undefined, !content);
+        // Prefer one page only when the user explicitly chose "1 page"; otherwise
+        // keep readable type and let lengthy CVs flow onto page 2 in the preview.
+        const preferSingle = pageTarget === "1";
+        const res = await api.previewCv(tpl, content || undefined, !content, preferSingle);
         setPreviewHtml(res.html);
       } catch {
         setPreviewHtml(null);
@@ -98,7 +101,7 @@ export function CvWorkspace({
         setPreviewLoading(false);
       }
     },
-    [markdown]
+    [markdown, pageTarget]
   );
 
   useEffect(() => {
@@ -152,7 +155,7 @@ export function CvWorkspace({
     if (tab === "preview" || tab === "templates") {
       loadPreview(templateId);
     }
-  }, [tab, templateId, loadPreview]);
+  }, [tab, templateId, pageTarget, loadPreview]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -240,7 +243,13 @@ export function CvWorkspace({
 
   const openTemplatePreview = async (id: string) => {
     try {
-      const res = await api.previewCv(id, markdown.trim() || undefined, !markdown.trim());
+      const preferSingle = pageTarget === "1";
+      const res = await api.previewCv(
+        id,
+        markdown.trim() || undefined,
+        !markdown.trim(),
+        preferSingle
+      );
       setPreviewModal(res.html);
     } catch {
       toast.error("Preview failed");
@@ -393,7 +402,11 @@ export function CvWorkspace({
             {showPdf ? (
               <CvPdfPreview version={pdfVersion} enabled={Boolean(artifacts?.has_pdf)} />
             ) : (
-              <CvHtmlPreview html={previewHtml} loading={loading || previewLoading} />
+              <CvHtmlPreview
+                html={previewHtml}
+                loading={loading || previewLoading}
+                allowMultiPage={pageTarget !== "1"}
+              />
             )}
             <p className="mt-2 text-center text-sm text-stone">
               {showPdf
@@ -402,7 +415,9 @@ export function CvWorkspace({
                       artifacts.page_count === 1 ? "" : "s"
                     }${artifacts.density ? ` · ${artifacts.density} spacing` : ""} — the file employers get`
                   : "Generate PDF to compile with your chosen Shortlistr template"
-                : "Fast HTML compare across templates — the PDF is the source of truth"}
+                : pageTarget === "1"
+                  ? "Trying to fit one page — long CVs still open onto page 2 if type would get too small"
+                  : "Long resumes open onto page 2 in this preview · PDF uses your Length setting"}
             </p>
           </div>
           <Card padding="lg" className="space-y-4 lg:col-span-2">
@@ -422,7 +437,9 @@ export function CvWorkspace({
                     key={t.id}
                     type="button"
                     title={t.hint}
-                    onClick={() => setPageTarget(t.id)}
+                    onClick={() => {
+                      setPageTarget(t.id);
+                    }}
                     className={`rounded-full border-2 px-3.5 py-2 text-sm font-bold transition ${
                       pageTarget === t.id
                         ? "border-lime bg-lime/10 text-ink"
@@ -590,6 +607,7 @@ export function CvWorkspace({
             <CvHtmlPreview
               html={previewHtml}
               loading={previewLoading}
+              allowMultiPage={pageTarget !== "1"}
               emptyMessage="Pick a Shortlistr template to preview your resume."
             />
           </div>
@@ -602,7 +620,11 @@ export function CvWorkspace({
         title="Template preview"
         size="xl"
       >
-        <CvHtmlPreview html={previewModal} loading={false} />
+        <CvHtmlPreview
+          html={previewModal}
+          loading={false}
+          allowMultiPage={pageTarget !== "1"}
+        />
       </Modal>
     </div>
   );

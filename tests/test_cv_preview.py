@@ -37,7 +37,19 @@ def test_render_cv_html_includes_name():
     assert "Pat Lee" in html
     assert "Professional Summary" in html
     assert "a4-sheet" in html
-    assert "fitOnePage" in html
+    assert "cv-fit-root" in html
+    assert 'data-single-page="false"' in html
+
+
+def test_render_prefers_multi_page_by_default():
+    html = render_cv_html(SAMPLE, "classic-ats")
+    assert "force-multi" in html or 'data-single-page="false"' in html
+    assert "is-flow" in html or "allow-multi" in html or "pageCountFor" in html
+
+
+def test_single_page_mode_still_available():
+    html = render_cv_html(SAMPLE, "classic-ats", single_page=True)
+    assert 'data-single-page="true"' in html
 
 
 def test_render_all_extra_sections():
