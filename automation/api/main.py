@@ -326,9 +326,23 @@ def create_app():
             check_playwright = None  # type: ignore
 
         store.init_db()
+        from store.queries import min_fit_threshold
+        from store.status import pipeline_status_counts
+
+        threshold = min_fit_threshold()
         with store.db() as conn:
-            pipeline_count = conn.execute("SELECT COUNT(*) AS c FROM pipeline").fetchone()["c"]
-            job_count = conn.execute("SELECT COUNT(*) AS c FROM jobs").fetchone()["c"]
+            job_count = conn.execute(
+                """
+                SELECT COUNT(*) AS c FROM jobs j
+                WHERE j.source != 'eval' AND j.archived_at IS NULL
+                  AND COALESCE(json_extract(j.metadata_json, '$.discovery_relevance'), 'relevant')
+                      != 'off_target'
+                  AND COALESCE(j.fit_score, 0) >= ?
+                """,
+                (threshold,),
+            ).fetchone()["c"]
+        targeted = pipeline_status_counts(targeted=True)
+        pipeline_count = sum(int(v) for v in targeted.values())
 
         from cv.placeholder import is_placeholder_cv
 
@@ -823,8 +837,10 @@ def create_app():
         if not req.dry_run:
             # User DB only gets profile keepers (relevant + fit floor).
             persist_discovered(passed, run_id)
+            from orchestrator.discovery import enrich_thin_matching_jobs
             from scheduler.scan_scheduler import record_scan_result
 
+            stats["jd_enrich"] = enrich_thin_matching_jobs()
             record_scan_result(stats, added=len(passed))
         gate = stats.get("persist_gate") or {}
         store.finish_run(

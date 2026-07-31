@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from models.job import JobRecord, job_id_from_url
-from store import db as store
+from models.job import JobRecord
 from store.export import export_pipeline
 
 logger = logging.getLogger(__name__)
@@ -17,19 +16,28 @@ def feed_jobs(
     dry_run: bool = False,
     export_markdown: bool = True,
 ) -> int:
-    """Upsert jobs and add to pending pipeline. Optionally export pipeline.md."""
+    """Upsert profile-matching jobs and add to pending pipeline.
+
+    Off-target / below-fit rows are dropped (same gate as discovery persist).
+    """
     if not jobs:
         return 0
 
     if dry_run:
-        return len(jobs)
+        from orchestrator.discovery import jobs_for_user_db
+        from pipeline.filter import apply_discovery_filter
 
-    # Batched: two connections total instead of two per job. At 2-hourly ingest
-    # the per-job path re-ran the migration ladder thousands of times per tick.
-    added = store.upsert_jobs(jobs)
-    store.add_jobs_to_pipeline(
-        [j.job_id or job_id_from_url(j.url) for j in jobs]
-    )
+        passed, rejected, _ = apply_discovery_filter(jobs)
+        for j in passed:
+            j.metadata["discovery_relevance"] = "relevant"
+        for j in rejected:
+            j.metadata["discovery_relevance"] = "off_target"
+        keepers, _gate = jobs_for_user_db(passed)
+        return len(keepers)
+
+    from orchestrator.discovery import persist_discovered
+
+    added = persist_discovered(jobs)
 
     if export_markdown and added:
         export_pipeline()

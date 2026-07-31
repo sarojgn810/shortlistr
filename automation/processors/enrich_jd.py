@@ -2,6 +2,10 @@
 
 Used after discovery and before eval so LinkedIn guest / search cards are not
 scored on title alone. Never submits applications.
+
+Honesty: we only keep roles whose title already matches the profile. When the
+card has no JD yet, we open the job URL and pull the description — same page a
+human would open after seeing a matching title.
 """
 
 from __future__ import annotations
@@ -16,12 +20,19 @@ from scrapers.html_text import html_to_markdown, html_to_plain
 logger = logging.getLogger(__name__)
 
 MIN_JD_CHARS = 200
-DEFAULT_LIMIT = 20
+DEFAULT_LIMIT = 40
+# Prefer these when present; title-matched stubs from any source still qualify.
 _THIN_SOURCES = frozenset({
     "LinkedIn",
     "SearchDiscovery",
     "Careers",
     "Naukri",
+    "Indeed",
+    "Dice",
+    "Monster",
+    "Seek",
+    "Hacker News",
+    "Naukrigulf",
 })
 
 
@@ -61,41 +72,78 @@ def enrich_job_page(job: dict[str, Any], *, allow_browser: bool = True) -> dict[
     return out
 
 
+def _title_matches_profile(title: str, location: str, source: str) -> bool:
+    try:
+        from models.job import JobRecord
+        from pipeline.filter import passes_title_location
+
+        return passes_title_location(
+            JobRecord(
+                url="https://enrich.local/stub",
+                source=source or "LinkedIn",
+                company="",
+                title=title or "",
+                location=location or "",
+            )
+        )
+    except Exception:
+        return bool((title or "").strip())
+
+
 def enrich_stub_jobs(
     *,
     limit: int = DEFAULT_LIMIT,
     allow_browser: bool = True,
     sources: set[str] | None = None,
+    title_match_only: bool = True,
 ) -> dict[str, int]:
-    """Persist JD text for thin rows already in SQLite."""
+    """Persist JD text for thin rows already in SQLite.
+
+    Prefers profile title/location matches — we do not burn fetches on off-target
+    titles. After a successful fetch, re-scores fit so "JD not fetched yet" is
+    not left as the lasting reason.
+    """
+    from processors.job_filter import score_job
     from store import db as store
 
     store.init_db()
-    wanted = sources or set(_THIN_SOURCES)
+    wanted = sources  # None → any source, filtered by title_match_only
     updated = 0
     failed = 0
+    rescored = 0
     scanned = 0
+    skipped_off_target = 0
 
     with store.db() as conn:
         rows = conn.execute(
             """
-            SELECT id, url, title, source, jd_text
+            SELECT id, url, title, location, source, jd_text, fit_score, fit_reason
             FROM jobs
             WHERE archived_at IS NULL
               AND source != 'eval'
               AND (jd_text IS NULL OR length(trim(jd_text)) < ?)
-            ORDER BY discovered_at DESC, updated_at DESC
+            ORDER BY
+              CASE WHEN source IN ({preferred}) THEN 0 ELSE 1 END,
+              discovered_at DESC, updated_at DESC
             LIMIT ?
-            """,
-            (MIN_JD_CHARS, max(limit * 3, limit)),
+            """.format(
+                preferred=",".join("?" for _ in _THIN_SOURCES) or "''"
+            ),
+            (MIN_JD_CHARS, *sorted(_THIN_SOURCES), max(limit * 5, limit)),
         ).fetchall()
 
         for row in rows:
             if scanned >= limit:
                 break
             source = str(row["source"] or "")
-            if wanted and source not in wanted:
+            if wanted is not None and source not in wanted:
                 continue
+            title = str(row["title"] or "")
+            location = str(row["location"] or "")
+            if title_match_only and not _title_matches_profile(title, location, source):
+                skipped_off_target += 1
+                continue
+
             scanned += 1
             result = enrich_job_page(dict(row), allow_browser=allow_browser)
             if not result.get("ok"):
@@ -105,7 +153,19 @@ def enrich_stub_jobs(
                 )
                 continue
             jd = str(result["jd_text"])
-            title = str(result.get("title") or "").strip()
+            new_title = str(result.get("title") or "").strip()
+            scored = score_job(
+                {
+                    "title": new_title or title,
+                    "location": location,
+                    "jd_text": jd,
+                    "jd_snippet": jd[:800],
+                    "source": source,
+                    "company": "",
+                }
+            )
+            fit = int(scored.get("fit_score") or 0)
+            reason = str(scored.get("fit_reason") or "")
             conn.execute(
                 """
                 UPDATE jobs SET
@@ -117,14 +177,45 @@ def enrich_stub_jobs(
                         WHEN ? != '' AND (title IS NULL OR trim(title) = '') THEN ?
                         ELSE title
                     END,
+                    fit_score = CASE
+                        WHEN ? > 0 THEN ?
+                        ELSE fit_score
+                    END,
+                    fit_reason = CASE
+                        WHEN ? != '' THEN ?
+                        ELSE fit_reason
+                    END,
                     updated_at = datetime('now')
                 WHERE id = ?
                 """,
-                (MIN_JD_CHARS, jd, title, title, row["id"]),
+                (
+                    MIN_JD_CHARS,
+                    jd,
+                    new_title,
+                    new_title,
+                    fit,
+                    fit,
+                    reason,
+                    reason,
+                    row["id"],
+                ),
             )
             updated += 1
+            if fit:
+                rescored += 1
 
+    out = {
+        "scanned": scanned,
+        "updated": updated,
+        "failed": failed,
+        "rescored": rescored,
+        "skipped_off_target": skipped_off_target,
+    }
     logger.info(
-        "JD enrich: scanned=%s updated=%s failed=%s", scanned, updated, failed
+        "JD enrich: scanned=%s updated=%s failed=%s skipped_off_target=%s",
+        scanned,
+        updated,
+        failed,
+        skipped_off_target,
     )
-    return {"scanned": scanned, "updated": updated, "failed": failed}
+    return out

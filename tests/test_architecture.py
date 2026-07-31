@@ -62,8 +62,15 @@ def test_discovery_filter_title_location(monkeypatch):
     monkeypatch.setattr(config, "SEARCH_KEYWORDS", ["SRE", "Site Reliability"])
     monkeypatch.setattr(config, "LOCATION_KEYWORDS", ["remote", "bengaluru"])
     monkeypatch.setattr(config, "WANTS_REMOTE", True)
+    monkeypatch.setattr(config, "LOCATION_PREFERENCE_SET", True)
 
-    match = JobRecord(url="http://a", source="RemoteOK", company="X", title="Senior SRE", location="Remote")
+    match = JobRecord(
+        url="http://a",
+        source="RemoteOK",
+        company="X",
+        title="Senior SRE",
+        location="Remote - Bengaluru",
+    )
     skip = JobRecord(url="http://b", source="Greenhouse", company="Y", title="Marketing Manager", location="NYC")
     assert passes_title_location(match)
     assert not passes_title_location(skip)
@@ -95,7 +102,14 @@ def test_source_registry_health():
 def test_sqlite_store_crud(isolated_data_dir):
     import store.db as db_mod
     db_mod.init_db()
-    job = JobRecord(url="https://test.example/j/1", source="test", company="Co", title="SRE")
+    job = JobRecord(
+        url="https://test.example/j/1",
+        source="test",
+        company="Co",
+        title="SRE",
+        fit_score=55,
+    )
+    job.metadata["discovery_relevance"] = "relevant"
     jid = db_mod.upsert_job(job)
     assert jid
     db_mod.add_to_pipeline(jid)

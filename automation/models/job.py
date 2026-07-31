@@ -10,10 +10,35 @@ from typing import Any
 
 
 def job_id_from_url(url: str) -> str:
-    u = (url or "").split("?")[0].strip()
-    if not u:
+    """Stable 16-hex id from a job URL.
+
+    Query strings are normally stripped so tracking params do not fork
+    duplicates. Boards that put the *job identity* in the query (Glassdoor
+    partner links, some Indeed click-trackers) must keep that key — otherwise
+    every listing in a digest collapses to one DB row.
+    """
+    from urllib.parse import parse_qs, urlparse
+
+    raw = (url or "").strip()
+    if not raw:
         return ""
-    return hashlib.sha256(u.encode()).hexdigest()[:16]
+    parsed = urlparse(raw)
+    base = f"{parsed.scheme}://{parsed.netloc}{parsed.path}".rstrip("/")
+    host = (parsed.netloc or "").lower()
+    path = (parsed.path or "").lower()
+    qs = parse_qs(parsed.query or "")
+
+    identity = base
+    if "glassdoor." in host and "joblisting" in path:
+        jid = (qs.get("jobListingId") or qs.get("joblistingid") or [""])[0]
+        if jid:
+            identity = f"{base}?jobListingId={jid}"
+    elif "cts.indeed.com" in host and parsed.query:
+        # Indeed email digests wrap destinations in cts trackers; keep the
+        # full query so distinct clicks stay distinct.
+        identity = f"{base}?{parsed.query}"
+
+    return hashlib.sha256(identity.encode()).hexdigest()[:16]
 
 
 @dataclass

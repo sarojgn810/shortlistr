@@ -49,11 +49,22 @@ def _linkedin_input(
     wants_remote: bool,
     cfg: dict[str, Any],
 ) -> dict[str, Any]:
+    # If the profile wants both a city and remote, do not remote-only filter —
+    # that dropped Bengaluru onsite LinkedIn roles while Remote was preferred.
+    loc = (location or "").strip()
+    loc_l = loc.lower()
+    has_city = bool(loc) and loc_l not in {"remote", "anywhere", "worldwide"}
+    if wants_remote and has_city:
+        remote = ["1", "2", "3"]  # onsite/hybrid in city + remote
+    elif wants_remote:
+        remote = ["2", "3"]
+    else:
+        remote = ["1"]
     return {
         "title": title,
         "location": location,
         "limit": min(limit, 100),
-        "remote": ["2", "3"] if wants_remote else ["1"],
+        "remote": remote,
     }
 
 

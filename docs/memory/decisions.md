@@ -13,6 +13,30 @@ Template:
 
 ---
 
+## 2026-07-31 — Geo-scoped remote (not worldwide)
+**Decision:** `Remote` + city/country means remote *in that geography*. Bare
+`Remote` alone stays worldwide (`REMOTE_STRICT`). `Remote (India)` chips and
+city→country inference (Bangalore → india/IST) feed `REMOTE_GEO_KEYWORDS`.
+`passes_title_location` no longer bypasses RemoteOK/Himalayas/Remotive when
+`WANTS_REMOTE` is set — remote listings must also hit the geo keywords.
+**Why:** Bangalore + Remote was accepting every global remote aggregator hit.
+**Touches:** `config.py`, `pipeline/filter.py`, `CityCombobox`, `profile.yml`.
+
+## 2026-07-31 — Free discovery first; Apify last; JD enrich for title matches
+**Decision:** Source order always ends with `apify` (paid). Free adapters
+(`watchlist_ats`, `workday`, `linkedin_guest`, aggregators, Naukri, search…)
+run first. Apify LinkedIn searches city **and** remote when both are preferred
+(not remote-only). Persist / pipeline feed / pending counts use the profile
+title+fit gate. After persist, `enrich_stub_jobs(title_match_only=True)` opens
+the job URL to fill thin JDs and re-scores. Retarget purge deletes child FK rows
+before jobs.
+**Why:** SideDoor-style LinkedIn dumps looked larger because we remote-filtered
+Apify and counted off-target Greenhouse noise as "pipeline"; stub cards said
+"JD not fetched" without following the posting link.
+**Touches:** `sources/registry.py`, `apify_boards.py`, `enrich_jd.py`,
+`pipeline_feed.py`, `discovery.py`, `connections_store.py`, setup/status counts,
+`config/profile.yml`.
+
 ## 2026-07-31 — Prep artifacts are job-scoped and owner-stamped
 **Decision:** Interview prep guides live at `interview-prep/{job_id}.md` with
 YAML `owner` (profile email) + `job_id`. Foreign or unstamped company-named

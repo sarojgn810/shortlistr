@@ -23,8 +23,14 @@ const CITIES = [
   "Taipei", "Jakarta", "Bangkok", "Ho Chi Minh City",
   // Middle East
   "Dubai", "Tel Aviv", "Riyadh",
-  // Remote
-  "Remote", "Anywhere",
+  // Remote — bare Remote = worldwide; scoped chips pin a country/region
+  "Remote",
+  "Remote (India)",
+  "Remote (US)",
+  "Remote (Europe)",
+  "Remote (UK)",
+  "Remote (Canada)",
+  "Remote (Australia)",
 ];
 
 interface CityComboboxProps {

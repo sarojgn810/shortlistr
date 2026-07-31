@@ -89,7 +89,9 @@ def test_enrich_stub_jobs_updates_db(isolated, monkeypatch):
             url=url, html=html, final_url=url, status=200, via="requests"
         ),
     )
-    result = enrich_jd.enrich_stub_jobs(limit=5, allow_browser=False)
+    result = enrich_jd.enrich_stub_jobs(
+        limit=5, allow_browser=False, title_match_only=False
+    )
     assert result["updated"] == 1
     with store.db() as conn:
         row = conn.execute(

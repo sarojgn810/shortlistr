@@ -78,6 +78,10 @@ def run_ingest(*, dry_run: bool = False, ttl: int = INGEST_TTL_SECONDS) -> dict:
         passed, rejected, stats = discover_and_filter(log_totals=True)
         gate = stats.get("persist_gate") or {}
         persisted = 0 if dry_run else persist_discovered(passed, run_id=run_id)
+        if not dry_run:
+            from orchestrator.discovery import enrich_thin_matching_jobs
+
+            stats["jd_enrich"] = enrich_thin_matching_jobs()
         store.finish_run(
             run_id,
             source_stats=stats,

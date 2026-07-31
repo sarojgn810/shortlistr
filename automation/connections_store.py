@@ -246,7 +246,10 @@ def save_connections_from_ui(body: dict[str, Any]) -> dict[str, Any]:
             enabled.append("apify")
         elif not want and "apify" in have:
             enabled = [x for x in enabled if str(x).strip().lower() != "apify"]
-        sources["enabled"] = enabled
+        # Free sources first — Apify is paid and always last.
+        free = [x for x in enabled if str(x).strip().lower() != "apify"]
+        paid = [x for x in enabled if str(x).strip().lower() == "apify"]
+        sources["enabled"] = free + paid
         # Sensible first-run boards if none configured yet.
         apify_cfg = sources.get("apify") if isinstance(sources.get("apify"), dict) else {}
         apify_cfg = dict(apify_cfg)

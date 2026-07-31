@@ -39,7 +39,8 @@ def test_single_preferred_location_narrows_to_that_city(tmp_path):
     # Airport / short aliases are expanded so board text like "Hyd" still matches.
     assert "hyd" in locs
     assert "bangalore" not in locs
-    assert "india" not in locs
+    # City prefs also infer the country for geo-scoped remote.
+    assert "india" in locs
 
 
 def test_blank_preferred_falls_back_to_default(tmp_path):
@@ -64,6 +65,8 @@ def test_remote_strict_when_only_remote_locations(tmp_path):
         config.SHORTLISTR_ROOT = str(tmp_path)
         config.reload_discovery_config()
         assert config.REMOTE_STRICT is True
+        assert config.REMOTE_GEO_SCOPED is False
+        assert config.REMOTE_GEO_KEYWORDS == []
     finally:
         config.SHORTLISTR_ROOT = original
 
@@ -74,6 +77,27 @@ def test_not_remote_strict_when_city_included(tmp_path):
     try:
         config.SHORTLISTR_ROOT = str(tmp_path)
         config.reload_discovery_config()
+        assert config.REMOTE_STRICT is False
+        assert config.REMOTE_GEO_SCOPED is True
+        assert "india" in config.REMOTE_GEO_KEYWORDS
+        assert "bangalore" in config.REMOTE_GEO_KEYWORDS
+    finally:
+        config.AUTOJOB_ROOT = original
+
+
+def test_remote_india_chip_expands(tmp_path):
+    locs = _reload(tmp_path, locations=["Remote (India)"])
+    assert "remote" in locs
+    assert "india" in locs
+    assert "ist" in locs
+    original = config.AUTOJOB_ROOT
+    try:
+        config.AUTOJOB_ROOT = str(tmp_path)
+        # _reload already called reload; re-check flags on current module state
+        # after writing Remote (India) only — re-call reload to be sure
+        config.reload_discovery_config()
+        assert config.WANTS_REMOTE is True
+        assert config.REMOTE_GEO_SCOPED is True
         assert config.REMOTE_STRICT is False
     finally:
         config.SHORTLISTR_ROOT = original
@@ -183,8 +207,8 @@ def test_remote_aggregator_filtered_when_no_remote_wanted(tmp_path):
         config.SHORTLISTR_ROOT = original
 
 
-def test_remote_aggregator_passes_when_remote_wanted(tmp_path):
-    """Remote-only sources should pass when user has 'Remote' in preferred_locations."""
+def test_worldwide_remote_rejected_when_geo_scoped(tmp_path):
+    """Bangalore + Remote must not accept bare worldwide Remote listings."""
     from models.job import JobRecord
     from pipeline.filter import passes_title_location
 
@@ -194,13 +218,73 @@ def test_remote_aggregator_passes_when_remote_wanted(tmp_path):
         config.SHORTLISTR_ROOT = str(tmp_path)
         config.reload_discovery_config()
 
-        remote_job = JobRecord(
-            url="https://example.com/job/2",
+        def _job(location: str, source: str = "RemoteOK") -> JobRecord:
+            return JobRecord(
+                url=f"https://example.com/job/{location}",
+                source=source,
+                company="TestCo",
+                title="Site Reliability Engineer",
+                location=location,
+            )
+
+        # Aggregator bypass is gone — bare Remote / US-only fail.
+        assert passes_title_location(_job("Remote")) is False
+        assert passes_title_location(_job("Remote - United States")) is False
+        assert passes_title_location(_job("Worldwide")) is False
+        assert passes_title_location(_job("Anywhere")) is False
+        # India / city signals pass.
+        assert passes_title_location(_job("Remote - Bengaluru")) is True
+        assert passes_title_location(_job("Remote, India")) is True
+        assert passes_title_location(_job("Remote (IST)")) is True
+        assert passes_title_location(_job("Bengaluru, India")) is True
+    finally:
+        config.AUTOJOB_ROOT = original
+
+
+def test_remote_india_chip_accepts_india_remote(tmp_path):
+    from models.job import JobRecord
+    from pipeline.filter import passes_title_location
+
+    _write_profile(str(tmp_path), locations=["Remote (India)"])
+    original = config.AUTOJOB_ROOT
+    try:
+        config.AUTOJOB_ROOT = str(tmp_path)
+        config.reload_discovery_config()
+
+        def _job(location: str) -> JobRecord:
+            return JobRecord(
+                url=f"https://example.com/{location}",
+                source="Remotive",
+                company="Co",
+                title="Site Reliability Engineer",
+                location=location,
+            )
+
+        assert passes_title_location(_job("Remote, India")) is True
+        assert passes_title_location(_job("Remote")) is False
+        assert passes_title_location(_job("Remote - USA")) is False
+    finally:
+        config.AUTOJOB_ROOT = original
+
+
+def test_bare_remote_still_accepts_worldwide(tmp_path):
+    from models.job import JobRecord
+    from pipeline.filter import passes_title_location
+
+    _write_profile(str(tmp_path), locations=["Remote"])
+    original = config.AUTOJOB_ROOT
+    try:
+        config.AUTOJOB_ROOT = str(tmp_path)
+        config.reload_discovery_config()
+        assert config.REMOTE_STRICT is True
+
+        job = JobRecord(
+            url="https://example.com/job/ww",
             source="RemoteOK",
             company="TestCo",
             title="Site Reliability Engineer",
             location="Remote",
         )
-        assert passes_title_location(remote_job) is True
+        assert passes_title_location(job) is True
     finally:
         config.SHORTLISTR_ROOT = original

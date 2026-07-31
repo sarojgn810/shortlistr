@@ -43,6 +43,17 @@ def _tag_relevance(passed: list[JobRecord], rejected: list[JobRecord]) -> None:
         j.metadata["discovery_relevance"] = "off_target"
 
 
+def enrich_thin_matching_jobs(*, limit: int = 40) -> dict:
+    """Fetch JD text for title-matched stubs (HTTP only — no browser spend)."""
+    try:
+        from processors.enrich_jd import enrich_stub_jobs
+
+        return enrich_stub_jobs(limit=limit, allow_browser=False, title_match_only=True)
+    except Exception as exc:
+        logger.warning("JD enrich after discover failed: %s", exc)
+        return {"error": str(exc)}
+
+
 def jobs_for_user_db(
     jobs: list[JobRecord],
     *,
@@ -243,13 +254,7 @@ def discover_and_filter(
         "scored": total_scored,
     }
     source_stats["persist_gate"] = gate_totals
-    try:
-        from processors.enrich_jd import enrich_stub_jobs
-
-        source_stats["jd_enrich"] = enrich_stub_jobs(limit=20, allow_browser=False)
-    except Exception as exc:
-        logger.warning("JD enrich after discover failed: %s", exc)
-        source_stats["jd_enrich"] = {"error": str(exc)}
+    source_stats["jd_enrich"] = enrich_thin_matching_jobs()
     return all_keepers, all_rejected, source_stats
 
 
@@ -330,8 +335,15 @@ def purge_mismatched_jobs(limit: int = 5000) -> dict:
 
         if to_delete:
             chunk = [(i,) for i in to_delete]
-            conn.executemany("DELETE FROM pipeline WHERE job_id = ?", chunk)
+            # Children first — FK ON DELETE is not always cascade across tables.
+            conn.executemany("DELETE FROM application_receipts WHERE job_id = ?", chunk)
+            conn.executemany("DELETE FROM applications WHERE job_id = ?", chunk)
             conn.executemany("DELETE FROM eval_results WHERE job_id = ?", chunk)
+            conn.executemany("DELETE FROM pipeline WHERE job_id = ?", chunk)
+            try:
+                conn.executemany("DELETE FROM referrals WHERE job_id = ?", chunk)
+            except Exception:
+                pass
             conn.executemany("DELETE FROM jobs WHERE id = ?", chunk)
             purged = len(to_delete)
 

@@ -37,6 +37,13 @@ LEGACY_SOURCES = {
 }
 
 
+def _apify_last(names: list[str]) -> list[str]:
+    """Keep free sources first; paid Apify always runs after them."""
+    free = [n for n in names if n != "apify"]
+    paid = [n for n in names if n == "apify"]
+    return free + paid
+
+
 class SourceRegistry:
     def __init__(self, enabled: list[str] | None = None):
         self.enabled = list(enabled if enabled is not None else SOURCE_ENABLED)
@@ -50,6 +57,8 @@ class SourceRegistry:
         # is registered and the profile didn't explicitly disable sources.
         if enabled is None and "workday" not in self.enabled:
             self.enabled.append("workday")
+        # Paid Apify always runs last so free sources fill the inbox first.
+        self.enabled = _apify_last(self.enabled)
 
     def adapters(self) -> list[SourceAdapter]:
         out: list[SourceAdapter] = []

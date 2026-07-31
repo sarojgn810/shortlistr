@@ -60,3 +60,12 @@ def test_same_url_yields_same_id():
     a = JobRecord(url=u, source="Lever", company="A", title="T")
     b = JobRecord(url=u.split("?")[0], source="Lever", company="A", title="T", job_id="999")
     assert a.job_id == b.job_id  # query string ignored, source id ignored
+
+
+def test_glassdoor_partner_ids_keep_listing_id():
+    a = "https://www.glassdoor.co.in/partner/jobListing.htm?pos=101&jobListingId=111&utm=x"
+    b = "https://www.glassdoor.co.in/partner/jobListing.htm?pos=102&jobListingId=222&utm=y"
+    c = "https://www.glassdoor.co.in/partner/jobListing.htm?pos=103&jobListingId=111&utm=z"
+    assert job_id_from_url(a) != job_id_from_url(b)
+    assert job_id_from_url(a) == job_id_from_url(c)  # same listing, different tracking
+    assert _HEX16.match(job_id_from_url(a))

@@ -165,7 +165,7 @@ def html_to_markdown(raw_html: str, *, max_len: int = 12000, base_url: str = "")
     if text:
         parts.append(text)
     if links:
-        parts.append("## Links\n" + "\n".join(dict.fromkeys(links)[:30]))
+        parts.append("## Links\n" + "\n".join(list(dict.fromkeys(links))[:30]))
 
     out = "\n\n".join(p for p in parts if p).strip()
     if max_len and len(out) > max_len:

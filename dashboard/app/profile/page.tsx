@@ -229,7 +229,11 @@ export default function ProfilePage() {
                   placeholder="Type a city name…"
                 />
                 <p className="mt-1.5 text-sm text-stone">
-                  Discovery filters jobs to these cities. Leave empty for no location restriction.
+                  Discovery filters jobs to these cities. Add{" "}
+                  <span className="text-ink">Remote (India)</span> (or another
+                  country) for remote roles in that region — bare{" "}
+                  <span className="text-ink">Remote</span> alone means worldwide.
+                  Leave empty for no location restriction.
                 </p>
               </Field>
               <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">

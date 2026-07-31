@@ -44,6 +44,9 @@ JOB_ALERT_SENDERS = [
     "simplyhired.com", "monster.com", "careerbuilder.com",
     "wellfound.com", "angellist.com", "instahyre.com", "cutshort.io",
     "otta.com", "ziprecruiter.com", "dice.com",
+    # India digests that were missing from the original list
+    "hirist.tech", "hirist.com", "iimjobs.com", "foundit.in",
+    "timesjobs.com", "shine.com", "freshersworld.com",
 ]
 
 # ── Recruiter signals in subject/body ────────────────────────────────────────
@@ -59,24 +62,232 @@ RECRUITER_SIGNALS = [
 ]
 
 # ── URL extractor ─────────────────────────────────────────────────────────────
+# Prefer broad host patterns — digests wrap links in trackers we unwrap later.
 _URL_RE = re.compile(
-    r'https?://(?:[a-zA-Z0-9-]+\.)*(?:'
-    r'naukri\.com/job-listings|'
-    r'linkedin\.com/jobs/view|'
-    r'indeed\.com/viewjob|'
-    r'remotive\.com/remote-jobs|'
-    r'himalayas\.app/jobs|'
-    r'remoteok\.com/l|'
-    r'weworkremotely\.com/remote-jobs|'
-    r'workingnomads\.com/jobs|'
-    r'greenhouse\.io|lever\.co|ashby\.io|'
-    r'jobs\.smartrecruiters\.com|'
-    r'wellfound\.com/jobs|'
-    r'otta\.com/jobs|instahyre\.com/job|cutshort\.io'
-    r')[^\s"\'<>)]+',
+    r'https?://[^\s"\'<>)\\]]+',
+    re.IGNORECASE,
+)
+_HREF_RE = re.compile(
+    r'''href=["'](https?://[^"']+)["']''',
     re.IGNORECASE,
 )
 
+# Path-ish patterns that look like a real posting (not homepage / settings).
+_JOB_URL_PATTERNS = (
+    r"naukri\.com/.*/?jd/job-listings",
+    r"naukri\.com/job-listings",
+    r"linkedin\.com/jobs/view",
+    r"indeed\.com/(viewjob|rc/clk|pagead/clk)",
+    r"cts\.indeed\.com/",  # Indeed click tracker — keep; enrich may follow
+    r"glassdoor\.[a-z.]+/.+joblisting",
+    r"hirist\.(tech|com)/j/",
+    r"cutshort\.io/(job|jobs)/",
+    r"instahyre\.com/job",
+    r"wellfound\.com/jobs/",
+    r"angel\.co/company/.+/jobs",
+    r"angellist\.com/.+/jobs",
+    r"greenhouse\.io/.+",
+    r"lever\.co/.+",
+    r"ashbyhq\.com/.+",
+    r"ashby\.io/.+",
+    r"myworkdayjobs\.com/.+",
+    r"workable\.com/(view|jobs)/",
+    r"smartrecruiters\.com/.+",
+    r"remotive\.(com|io)/remote-jobs/",
+    r"himalayas\.app/jobs/",
+    r"remoteok\.com/remote-jobs/",
+    r"weworkremotely\.com/remote-jobs/",
+    r"otta\.com/jobs/",
+    r"dice\.com/job-detail/",
+    r"ziprecruiter\.com/jobs/",
+    r"foundit\.in/job/",
+    r"iimjobs\.com/j/",
+    r"postoffice\.hirist\.[a-z]+/CL0/",  # unwrapped later
+    r"pstmrk\.it/",  # unwrapped later
+)
+_JOB_URL_RE = re.compile("|".join(f"(?:{p})" for p in _JOB_URL_PATTERNS), re.I)
+
+
+def _is_plausible_job_url(url: str) -> bool:
+    u = (url or "").lower()
+    if not u.startswith("http"):
+        return False
+    skip = (
+        "unsubscribe",
+        "mailto:",
+        "/logo",
+        "pixel",
+        "brand-views",
+        "favicon",
+        "/assets/email",
+        "media.glassdoor",
+        "mnjuser",
+        "/settings",
+        "/course/",
+        "/jobfeed",
+        "feedback.php",
+        "termscondition",
+        "fakejobtrend",
+        "onelink.me",
+        "engage.indeed.com",
+        "u003e",
+    )
+    if any(s in u for s in skip):
+        return False
+    # Bare board homepages (no path beyond /)
+    from urllib.parse import urlparse
+
+    path = (urlparse(u).path or "").strip("/")
+    if not path and "cts.indeed.com" not in u and "pstmrk.it" not in u:
+        return False
+    return bool(_JOB_URL_RE.search(u))
+
+
+def _unwrap_tracking_url(url: str) -> str:
+    """Turn digest/tracker wrappers into the underlying job URL when possible."""
+    from html import unescape
+    from urllib.parse import unquote
+
+    u = unescape((url or "").strip())
+    if not u:
+        return u
+
+    # Hirist / iimjobs click wrappers: .../CL0/https:%2F%2Fwww.hirist.tech%2Fj%2F...
+    if "/CL0/" in u:
+        encoded = u.split("/CL0/", 1)[1]
+        encoded = re.split(r"/\d+/[0-9a-f-]{8,}", encoded, maxsplit=1)[0]
+        decoded = unquote(encoded)
+        if decoded.startswith("http"):
+            return decoded.split("?")[0] if "/j/" in decoded else decoded
+
+    # Remotive Postmark: track.pstmrk.it/3s/<urlencoded-dest>/...
+    if "pstmrk.it" in u and "/3s/" in u:
+        dest = u.split("/3s/", 1)[1]
+        dest = dest.split("/eHy2/")[0].split("/Ag7HAQ/")[0]
+        dest = unquote(dest)
+        if not dest.startswith("http"):
+            dest = "https://" + dest.lstrip("/")
+        return dest
+
+    return u
+
+
+def _canonicalize_job_url(url: str) -> str:
+    u = _unwrap_tracking_url(url).strip().rstrip(".,);]>\"'")
+    if not u:
+        return ""
+    # Glassdoor partner links need query params; Naukri /jd/ links keep id in path.
+    if "joblisting.htm" in u.lower() or "partner/joblisting" in u.lower():
+        return u.split("#")[0]
+    if "/jd/job-listings" in u.lower() or "hirist.tech/j/" in u.lower():
+        return u.split("#")[0]
+    return u.split("?")[0].split("#")[0]
+
+
+_HREF_TEXT_RE = re.compile(
+    r'''href=["'](https?://[^"']+)["'][^>]*>(.*?)</a>''',
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _clean_anchor_text(raw: str) -> str:
+    from html import unescape
+
+    t = unescape(raw or "")
+    t = re.sub(r"<[^>]+>", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    # Digests often use "Apply" / "View job" as the only link text.
+    if len(t) < 8 or t.lower() in {
+        "apply",
+        "apply now",
+        "view job",
+        "view",
+        "click here",
+        "here",
+        "see job",
+        "open role",
+        "role",
+        "x",
+    }:
+        return ""
+    # Glassdoor: "Kaseya 3.7 ★ Site Reliability Engineer Bengaluru Easy Apply 2d"
+    t = re.sub(r"^[A-Za-z0-9 .,&+'()-]{1,40}?\d\.\d\s*★\s*", "", t)
+    t = re.sub(
+        r"\s*(?:Easy Apply|Just posted|\d+d)\s*$",
+        "",
+        t,
+        flags=re.I,
+    )
+    t = re.sub(r"\s*₹[\d.LCrK+\s\-–]+(?:\(\s*Glassdoor[^)]*\))?\s*$", "", t, flags=re.I)
+    return t.strip(" -–|:")[:160]
+
+
+def _title_from_url_slug(url: str) -> str:
+    u = url or ""
+    if "hirist.tech/j/" in u:
+        slug = u.rstrip("/").split("/")[-1]
+        return slug.replace("-", " ")[:120]
+    if "/jd/job-listings-" in u:
+        slug = u.split("/jd/job-listings-", 1)[-1].split("?")[0]
+        return slug.replace("-", " ")[:120]
+    if "job-listings-" in u and "naukri.com" in u:
+        slug = u.split("job-listings-", 1)[-1].split("?")[0]
+        return slug.replace("-", " ")[:120]
+    return ""
+
+
+def _subject_title_hint(subject: str) -> str:
+    """Pull the lead role from digest subjects like 'SRE at Shell and 11 more…'."""
+    s = (subject or "").strip()
+    if not s:
+        return ""
+    s = re.sub(r"^(re:\s*)+", "", s, flags=re.I)
+    s = re.sub(r"\s+and\s+\d+\s+more\b.*$", "", s, flags=re.I)
+    s = re.sub(r"\s+for you\.?$", "", s, flags=re.I)
+    s = re.sub(r"\s+in\s+[A-Za-z][A-Za-z\s/,-]{2,40}\.?$", "", s, flags=re.I)
+    return s.strip(" -–|:.")[:160]
+
+
+def _subject_location_hint(subject: str) -> str:
+    m = re.search(
+        r"\bin\s+([A-Za-z][A-Za-z\s/,-]{1,40}?)(?:\s+for\s+you)?\.?\s*$",
+        subject or "",
+        re.I,
+    )
+    if not m:
+        return ""
+    return m.group(1).strip(" .,")[:80]
+
+
+def _extract_job_links(text: str) -> list[tuple[str, str]]:
+    """Return [(canonical_url, anchor_title_hint), ...] de-duplicated by URL."""
+    from html import unescape
+
+    blob = unescape(text or "")
+    url_titles: dict[str, str] = {}
+    ordered_urls: list[str] = []
+
+    def _note(raw_url: str, hint: str = "") -> None:
+        u = _canonicalize_job_url(raw_url)
+        if not u or not _is_plausible_job_url(u):
+            return
+        key = u.lower()
+        if key not in url_titles:
+            ordered_urls.append(u)
+            url_titles[key] = hint
+        elif hint and not url_titles[key]:
+            url_titles[key] = hint
+
+    for raw_url, raw_text in _HREF_TEXT_RE.findall(blob):
+        _note(raw_url, _clean_anchor_text(raw_text))
+    for raw in _HREF_RE.findall(blob) + _URL_RE.findall(blob):
+        _note(raw)
+
+    return [(u, url_titles.get(u.lower(), "")) for u in ordered_urls]
+
+
+def _extract_urls_from_text(text: str) -> list[str]:
+    return [u for u, _ in _extract_job_links(text)]
 
 # ── Gmail auth ────────────────────────────────────────────────────────────────
 
@@ -138,22 +349,48 @@ def _save_state(state: dict):
 # ── Message helpers ───────────────────────────────────────────────────────────
 
 def _decode_body(msg_data: dict) -> str:
-    """Extract plain text body from Gmail message payload."""
-    payload = msg_data.get("payload", {})
-    body = ""
+    """Extract plain + HTML bodies from a Gmail message payload.
 
-    def _walk(part):
-        nonlocal body
-        mime = part.get("mimeType", "")
-        if mime == "text/plain":
-            data = part.get("body", {}).get("data", "")
-            if data:
-                body += base64.urlsafe_b64decode(data + "==").decode("utf-8", errors="ignore")
-        for sub in part.get("parts", []):
+    Job digests are often HTML-only (no text/plain). Older code ignored HTML,
+    so Glassdoor/Naukri/Hirist alerts looked like they had zero links.
+    """
+    payload = msg_data.get("payload", {})
+    plains: list[str] = []
+    htmls: list[str] = []
+
+    def _decode_data(data: str) -> str:
+        if not data:
+            return ""
+        try:
+            return base64.urlsafe_b64decode(data + "==").decode("utf-8", errors="ignore")
+        except Exception:
+            return ""
+
+    def _walk(part: dict) -> None:
+        mime = (part.get("mimeType") or "").lower()
+        data = (part.get("body") or {}).get("data") or ""
+        if data:
+            text = _decode_data(data)
+            if mime == "text/plain":
+                plains.append(text)
+            elif mime == "text/html":
+                htmls.append(text)
+            elif not mime and text:
+                plains.append(text)
+        for sub in part.get("parts") or []:
             _walk(sub)
 
     _walk(payload)
-    return body
+    # Single-part messages put data on the root payload.
+    root_data = (payload.get("body") or {}).get("data") or ""
+    root_mime = (payload.get("mimeType") or "").lower()
+    if root_data and not plains and not htmls:
+        text = _decode_data(root_data)
+        if root_mime == "text/html":
+            htmls.append(text)
+        else:
+            plains.append(text)
+    return "\n".join(plains + htmls)
 
 
 def _get_header(msg_data: dict, name: str) -> str:
@@ -166,13 +403,23 @@ def _get_header(msg_data: dict, name: str) -> str:
 
 # ── Job alert handler ─────────────────────────────────────────────────────────
 
-def fetch_alert_job_records(max_messages: int = 50) -> list:
+# How far back to look for job-alert digests (read + unread).
+GMAIL_ALERT_QUERY = "newer_than:7d"
+# Digests are noisy; pull enough that a busy week of alerts is covered.
+GMAIL_ALERT_MAX_MESSAGES = 100
+
+
+def fetch_alert_job_records(max_messages: int | None = None) -> list:
     """
-    Scan unread inbox for job-alert senders; return JobRecord list (no pipeline write).
-    Used by GmailAdapter and monitor_inbox().
+    Scan recent inbox for job-alert senders (read and unread); return JobRecords.
+
+    Used by GmailAdapter and monitor_inbox(). Does not write the pipeline.
     """
     from models.job import JobRecord
     from scrapers.ats_url_resolver import resolve_job_url
+
+    if max_messages is None:
+        max_messages = GMAIL_ALERT_MAX_MESSAGES
 
     service = _get_gmail_service()
     if not service:
@@ -182,17 +429,28 @@ def fetch_alert_job_records(max_messages: int = 50) -> list:
     processed = set(state.get("processed_ids", []))
 
     try:
-        result = service.users().messages().list(
-            userId="me",
-            q="is:unread newer_than:2d",
-            maxResults=max_messages,
-        ).execute()
-        messages = result.get("messages", [])
+        messages: list[dict] = []
+        page_token: str | None = None
+        while len(messages) < max_messages:
+            batch = min(50, max_messages - len(messages))
+            req = {
+                "userId": "me",
+                "q": GMAIL_ALERT_QUERY,
+                "maxResults": batch,
+            }
+            if page_token:
+                req["pageToken"] = page_token
+            result = service.users().messages().list(**req).execute()
+            messages.extend(result.get("messages") or [])
+            page_token = result.get("nextPageToken")
+            if not page_token:
+                break
     except Exception as e:
         logger.warning(f"Gmail list error: {e}")
         return []
 
-    all_job_urls: list[str] = []
+    # (url, title_hint, location_hint)
+    candidates: list[tuple[str, str, str]] = []
     new_processed = set(processed)
 
     for msg_ref in messages:
@@ -216,10 +474,22 @@ def fetch_alert_job_records(max_messages: int = 50) -> list:
         if not is_alert:
             continue
 
-        new_processed.add(msg_id)
-        urls = _URL_RE.findall(body + " " + subject)
-        if urls:
-            all_job_urls.extend(urls)
+        links = _extract_job_links(body + " " + subject)
+        if links:
+            subj_title = _subject_title_hint(subject)
+            subj_loc = _subject_location_hint(subject)
+            for url, anchor in links:
+                title = _title_from_url_slug(url) or anchor or subj_title or "Email alert"
+                candidates.append((url, title, subj_loc))
+            # Only mark handled when we actually extracted links — otherwise a
+            # decode bug would permanently skip these unread digests.
+            new_processed.add(msg_id)
+        else:
+            logger.debug(
+                "Job alert with no extractable URLs yet: %s | %s",
+                sender[:60],
+                subject[:80],
+            )
 
     state["processed_ids"] = list(new_processed)[-500:]
     state["last_run"] = datetime.now(timezone.utc).isoformat()
@@ -227,22 +497,30 @@ def fetch_alert_job_records(max_messages: int = 50) -> list:
 
     seen: set[str] = set()
     jobs = []
-    for url in all_job_urls:
-        u = url.split("?")[0].strip()
-        if not u or u in seen:
+    for url, title_hint, loc_hint in candidates:
+        u = _canonicalize_job_url(url)
+        if not u or u.lower() in seen:
             continue
-        seen.add(u)
+        seen.add(u.lower())
         resolved = resolve_job_url(u)
         if resolved:
-            jobs.append(JobRecord.from_dict({**resolved, "source": "Gmail"}))
+            data = {**resolved, "source": "Gmail"}
+            # Prefer slug/anchor/subject when resolver only has a stub title.
+            rt = (data.get("title") or "").strip()
+            if not rt or rt.lower() in {"email alert", "unknown", "job"}:
+                data["title"] = title_hint
+            if loc_hint and not (data.get("location") or "").strip():
+                data["location"] = loc_hint
+            jobs.append(JobRecord.from_dict(data))
         else:
             jobs.append(
                 JobRecord(
                     url=u,
                     source="Gmail",
                     company="Unknown",
-                    title="Email alert",
-                    notes=f"From job alert email",
+                    title=title_hint,
+                    location=loc_hint or "",
+                    notes="From job alert email",
                 )
             )
     return jobs

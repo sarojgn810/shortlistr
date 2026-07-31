@@ -351,10 +351,37 @@ def upsert_jobs(jobs: list[JobRecord]) -> int:
     which is thousands of redundant schema executions on a 2-hourly ingest."""
     if not jobs:
         return 0
-    rows = [_job_params(j) for j in jobs]
+    # Last-wins de-dupe by canonical id so a digest cannot INSERT the same id twice.
+    by_id: dict[str, JobRecord] = {}
+    for job in jobs:
+        jid = job.job_id or job_id_from_url(job.url)
+        if jid:
+            by_id[jid] = job
+    jobs = list(by_id.values())
     with db() as conn:
-        conn.executemany(_UPSERT_JOB_SQL, rows)
-    return len(rows)
+        # If a URL already exists under a different id (identity-key change, e.g.
+        # Glassdoor now hashes jobListingId), keep the existing PK so FK rows in
+        # pipeline/eval_results stay valid — only refresh the content.
+        for job in jobs:
+            jid = job.job_id or job_id_from_url(job.url)
+            row = conn.execute(
+                "SELECT id FROM jobs WHERE url = ? AND id != ?",
+                (job.url, jid),
+            ).fetchone()
+            if row:
+                job.job_id = row["id"]
+        rows = [_job_params(j) for j in jobs]
+        # Re-dedupe in case two new ids remapped onto the same existing PK.
+        seen: set[str] = set()
+        deduped_rows: list[tuple] = []
+        for row in reversed(rows):
+            if row[0] in seen:
+                continue
+            seen.add(row[0])
+            deduped_rows.append(row)
+        deduped_rows.reverse()
+        conn.executemany(_UPSERT_JOB_SQL, deduped_rows)
+    return len(deduped_rows)
 
 
 def add_jobs_to_pipeline(job_ids: list[str], status: str = "pending") -> int:
@@ -416,16 +443,16 @@ def get_last_run() -> dict | None:
 
 
 def pending_pipeline_count() -> int:
-    with db() as conn:
-        row = conn.execute(
-            "SELECT COUNT(*) AS c FROM pipeline WHERE status='pending'"
-        ).fetchone()
-        return int(row["c"]) if row else 0
+    """Pending rows that still match the live profile (title + fit floor)."""
+    from store.status import pipeline_status_counts
+
+    return int(pipeline_status_counts(targeted=True).get("pending") or 0)
 
 
 def pipeline_breakdown() -> dict[str, int]:
     from store.status import pipeline_status_counts
-    return pipeline_status_counts()
+
+    return pipeline_status_counts(targeted=True)
 
 
 def add_to_pipeline(job_id: str, status: str = "pending") -> None:

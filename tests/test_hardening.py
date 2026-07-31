@@ -82,13 +82,41 @@ def test_parallel_flat_map():
     assert sorted(out) == [1, 2, 3, 10, 20, 30]
 
 
-def test_pipeline_feed_sqlite(isolated_data_dir):
+def test_pipeline_feed_sqlite(isolated_data_dir, monkeypatch):
+    import config
     from models.job import JobRecord
     from store import db as store
     from store.pipeline_feed import feed_jobs
 
+    monkeypatch.setattr(
+        config,
+        "SEARCH_KEYWORDS",
+        ["site reliability engineer", "sre", "mlops"],
+        raising=False,
+    )
+    monkeypatch.setattr(config, "LOCATION_KEYWORDS", ["bangalore", "bengaluru", "india", "remote"], raising=False)
+    monkeypatch.setattr(config, "LOCATION_PREFERENCE_SET", True, raising=False)
+    monkeypatch.setattr(config, "WANTS_REMOTE", True, raising=False)
+    monkeypatch.setattr(config, "MIN_FIT_SCORE", 40, raising=False)
+    monkeypatch.setattr(config, "REMOTE_STRICT", False, raising=False)
+    monkeypatch.setattr(config, "DEAL_BREAKERS", [], raising=False)
+    monkeypatch.setattr(config, "MIN_SALARY_INR_LPA", 0, raising=False)
+    monkeypatch.setattr(config, "MIN_SALARY_USD", 0, raising=False)
+    monkeypatch.setattr(config, "SALARY_UNLISTED", "include", raising=False)
+    monkeypatch.setattr(config, "CANDIDATE", {"years_exp": 9}, raising=False)
+
     store.init_db()
-    job = JobRecord(url="https://example.com/j/1", source="test", company="Co", title="SRE")
+    job = JobRecord(
+        url="https://example.com/j/1",
+        source="test",
+        company="Co",
+        title="Site Reliability Engineer",
+        location="Remote - India",
+        jd_text="Kubernetes Prometheus Terraform on-call reliability. " * 8,
+        fit_score=60,
+        fit_reason="title match",
+    )
+    job.metadata["discovery_relevance"] = "relevant"
     n = feed_jobs([job], export_markdown=False)
     assert n == 1
     assert store.pending_pipeline_count() >= 1

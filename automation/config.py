@@ -335,6 +335,68 @@ SEARCH_KEYWORDS = _FILTERS["target_titles"] or list(_DEFAULT_SEARCH_KEYWORDS)
 
 _REMOTE_TERMS = {"remote", "anywhere", "worldwide", "global", "work from home", "wfh"}
 
+# "Remote (India)" chips → country/region geo keywords for scoped remote.
+_SCOPED_REMOTE_RE = re.compile(r"^remote\s*\(([^)]+)\)\s*$", re.I)
+_COUNTRY_GEO: dict[str, tuple[str, ...]] = {
+    "india": ("india", "indian", "ist", "bharat"),
+    "us": ("united states", "usa", "u.s.", "u.s.a", "america"),
+    "usa": ("united states", "usa", "u.s.", "u.s.a", "america"),
+    "united states": ("united states", "usa", "u.s.", "u.s.a", "america"),
+    "europe": ("europe", "eu", "emea", "european"),
+    "uk": ("united kingdom", "uk", "britain", "england", "london"),
+    "united kingdom": ("united kingdom", "uk", "britain", "england"),
+    "canada": ("canada", "canadian"),
+    "australia": ("australia", "australian"),
+}
+
+# Preferred cities imply a country so "Bangalore + Remote" means Remote-India,
+# not Remote-worldwide.
+_CITY_TO_COUNTRY: dict[str, str] = {
+    "bangalore": "india",
+    "bengaluru": "india",
+    "blr": "india",
+    "mumbai": "india",
+    "bombay": "india",
+    "delhi": "india",
+    "new delhi": "india",
+    "ncr": "india",
+    "gurgaon": "india",
+    "gurugram": "india",
+    "noida": "india",
+    "hyderabad": "india",
+    "hyd": "india",
+    "chennai": "india",
+    "madras": "india",
+    "kolkata": "india",
+    "calcutta": "india",
+    "pune": "india",
+    "pnq": "india",
+    "ahmedabad": "india",
+    "jaipur": "india",
+    "bhubaneswar": "india",
+    "kochi": "india",
+    "chandigarh": "india",
+    "indore": "india",
+    "san francisco": "us",
+    "new york": "us",
+    "seattle": "us",
+    "austin": "us",
+    "boston": "us",
+    "los angeles": "us",
+    "chicago": "us",
+    "denver": "us",
+    "london": "uk",
+    "berlin": "europe",
+    "amsterdam": "europe",
+    "paris": "europe",
+    "dublin": "europe",
+    "munich": "europe",
+    "toronto": "canada",
+    "vancouver": "canada",
+    "sydney": "australia",
+    "melbourne": "australia",
+}
+
 # City names on Indian boards often differ from what users type in the profile
 # (Bangalore vs Bengaluru). Expand at build time so every consumer of
 # LOCATION_KEYWORDS — discovery filter, Naukri query, fit scorer — agrees.
@@ -352,6 +414,7 @@ _LOCATION_ALIASES: dict[str, tuple[str, ...]] = {
     "kolkata": ("calcutta",),
     "calcutta": ("kolkata",),
     "pune": ("pnq",),
+    "india": ("indian", "ist", "bharat"),
 }
 
 
@@ -373,10 +436,16 @@ _CITY_SPELLINGS: tuple[frozenset[str], ...] = (
 
 def search_locations(limit: int = 3) -> list[str]:
     """City query terms, one per city, abbreviations only when nothing better."""
+    # Prefer real cities over country/region geo anchors for board queries.
+    country_keys = set()
+    for terms in _COUNTRY_GEO.values():
+        country_keys.update(terms)
     keys = [
         str(loc).lower().strip()
         for loc in LOCATION_KEYWORDS or []
-        if str(loc).lower().strip() and str(loc).lower().strip() not in _REMOTE_TERMS
+        if str(loc).lower().strip()
+        and str(loc).lower().strip() not in _REMOTE_TERMS
+        and str(loc).lower().strip() not in country_keys
     ]
     out: list[str] = []
     claimed: set[frozenset[str]] = set()
@@ -389,21 +458,64 @@ def search_locations(limit: int = 3) -> list[str]:
     return out[:limit]
 
 
+def _parse_preferred_entry(raw: str) -> tuple[bool, list[str]]:
+    """Split one preferred_locations entry into (wants_remote, place_keys)."""
+    key = str(raw).lower().strip()
+    if not key:
+        return False, []
+    m = _SCOPED_REMOTE_RE.match(key)
+    if m:
+        region = m.group(1).strip().lower()
+        geos = list(_COUNTRY_GEO.get(region, (region,)))
+        return True, geos
+    if key in _REMOTE_TERMS:
+        return True, []
+    return False, [key]
+
+
 def _expand_location_keywords(preferred: list[str]) -> list[str]:
-    """Lowercase preferred locations and add known city aliases."""
-    locs: list[str] = []
+    """Lowercase preferred locations, expand aliases, and keep remote as a flag.
+
+    ``Remote (India)`` becomes remote intent + india geo keywords.
+    Cities also infer a country (Bangalore → india) for geo-scoped remote.
+    """
+    wants_remote = False
+    places: list[str] = []
     seen: set[str] = set()
-    for loc in preferred:
-        key = str(loc).lower().strip()
-        if not key or key in seen:
-            continue
-        locs.append(key)
+
+    def _add_place(key: str) -> None:
+        if not key or key in seen or key in _REMOTE_TERMS:
+            return
+        places.append(key)
         seen.add(key)
         for alias in _LOCATION_ALIASES.get(key, ()):
             if alias not in seen:
-                locs.append(alias)
+                places.append(alias)
                 seen.add(alias)
-    return locs or ["remote"]
+
+    for loc in preferred:
+        remote_flag, place_keys = _parse_preferred_entry(loc)
+        if remote_flag:
+            wants_remote = True
+        for pk in place_keys:
+            _add_place(pk)
+            country = _CITY_TO_COUNTRY.get(pk)
+            if country:
+                for geo in _COUNTRY_GEO.get(country, (country,)):
+                    _add_place(geo)
+
+    if wants_remote:
+        places.append("remote")
+    return places or ["remote"]
+
+
+def _build_remote_geo_keywords(location_keywords: list[str]) -> list[str]:
+    """Non-remote place/country terms used to scope remote jobs."""
+    return [
+        kw
+        for kw in location_keywords
+        if kw and kw not in _REMOTE_TERMS
+    ]
 
 
 def _preferred_locations() -> list[str]:
@@ -426,12 +538,15 @@ LOCATION_KEYWORDS: list[str] = _build_location_keywords()
 # thousands of jobs while Discover stays empty.
 LOCATION_PREFERENCE_SET: bool = bool(_preferred_locations())
 
-# REMOTE_STRICT is True when preferred_locations contains ONLY remote terms
-# (no city names). If the user listed any city, allow non-remote jobs too.
-REMOTE_STRICT = LOCATION_PREFERENCE_SET and all(
-    kw in _REMOTE_TERMS for kw in LOCATION_KEYWORDS
-)
 WANTS_REMOTE = any(kw in _REMOTE_TERMS for kw in LOCATION_KEYWORDS)
+# Place/country anchors for geo-scoped remote (Bangalore + Remote → India).
+REMOTE_GEO_KEYWORDS: list[str] = (
+    _build_remote_geo_keywords(LOCATION_KEYWORDS) if LOCATION_PREFERENCE_SET else []
+)
+# Bare Remote / Anywhere only → worldwide remote still allowed.
+REMOTE_STRICT = LOCATION_PREFERENCE_SET and WANTS_REMOTE and not REMOTE_GEO_KEYWORDS
+# Remote + city/country → remote jobs must also hit REMOTE_GEO_KEYWORDS.
+REMOTE_GEO_SCOPED = bool(WANTS_REMOTE and REMOTE_GEO_KEYWORDS)
 MIN_SALARY_INR_LPA = _FILTERS["min_salary_inr_lpa"]
 MIN_SALARY_USD = _FILTERS["min_salary_usd"]
 DEAL_BREAKERS = _FILTERS["deal_breakers"]
@@ -586,7 +701,8 @@ def reload_discovery_config() -> None:
     against a leftover profile would never fall back.
     """
     global SEARCH_KEYWORDS, LOCATION_KEYWORDS, LOCATION_PREFERENCE_SET
-    global REMOTE_STRICT, WANTS_REMOTE, MIN_SALARY_INR_LPA, MIN_SALARY_USD, DEAL_BREAKERS
+    global REMOTE_STRICT, WANTS_REMOTE, REMOTE_GEO_KEYWORDS, REMOTE_GEO_SCOPED
+    global MIN_SALARY_INR_LPA, MIN_SALARY_USD, DEAL_BREAKERS
     global CANDIDATE, APPLICATION, _PROFILE
     global LINKEDIN_CONFIG, NAUKRI_CONFIG, MCP_SERVERS, EMAIL_CONFIG
     import yaml
@@ -617,8 +733,12 @@ def reload_discovery_config() -> None:
     LOCATION_PREFERENCE_SET = bool(preferred)
     locs = _expand_location_keywords(preferred) if preferred else ["remote"]
     LOCATION_KEYWORDS = locs
-    REMOTE_STRICT = LOCATION_PREFERENCE_SET and all(kw in _REMOTE_TERMS for kw in locs)
     WANTS_REMOTE = any(kw in _REMOTE_TERMS for kw in locs)
+    REMOTE_GEO_KEYWORDS = (
+        _build_remote_geo_keywords(locs) if LOCATION_PREFERENCE_SET else []
+    )
+    REMOTE_STRICT = LOCATION_PREFERENCE_SET and WANTS_REMOTE and not REMOTE_GEO_KEYWORDS
+    REMOTE_GEO_SCOPED = bool(WANTS_REMOTE and REMOTE_GEO_KEYWORDS)
 
     # Apply-assist reads these at fill time — keep them live after profile save.
     CANDIDATE = _candidate_from_profile(data)
