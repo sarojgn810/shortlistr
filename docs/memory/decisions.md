@@ -13,14 +13,14 @@ Template:
 
 ---
 
-## 2026-08-01 — YC demo hardening (hybrid AI + slim inbox)
+## 2026-08-01 — Demo hardening (hybrid AI + slim inbox)
 **Decision:** Inbox list uses slim SQL (score/legitimacy/mode flags only — no
 `result_json` blobs). Hybrid AI default: Local when ready, else Groq-first CTA;
 chat no-LLM path returns human replies + `needs_llm` CTA. Windows Local AI tries
 winget before browser download. Optimistic Approve/Skip; scan refetches jobs
 sparingly. Never auto-submit / never Instantly blast.
 **Why:** Second-laptop demos were failing on `/jobs` 500s, felt latency, and
-dead chat without Ollama. Failures must be loud and actionable (Karpathy/YC).
+dead chat without Ollama. Failures must be loud and actionable (short happy path).
 **Touches:** `store/queries.py` (`LATEST_EVAL_JOIN_SLIM`), `jobs_api`, `enrich`,
 `agent/chat.py`, `local_ai.py`, `useJobs`, AssistantDock, GroqKeyModal, README
 demo script.

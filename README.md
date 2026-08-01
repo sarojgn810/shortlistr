@@ -61,7 +61,7 @@ Day-to-day setup (LLM key, Playwright, Apify, Gmail) lives in the dashboard **Co
 
 ---
 
-## YC demo script (≈5 minutes)
+## Demo script (≈5 minutes)
 
 Happy path for a live demo on a second laptop:
 

@@ -9,7 +9,7 @@ import { useProfile } from "@/src/hooks/useProfile";
 import { ApiError } from "@/src/lib/api/client";
 
 /**
- * YC demo path: paste a free Groq key so chat/eval work without waiting on Ollama.
+ * Demo path: paste a free Groq key so chat/eval work without waiting on Ollama.
  */
 export function GroqKeyModal({
   open,

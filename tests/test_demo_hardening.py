@@ -1,4 +1,4 @@
-"""YC hardening — slim /jobs list never ships full eval JSON; Windows Local AI path."""
+"""Demo hardening — slim /jobs list never ships full eval JSON; Windows Local AI path."""
 
 from __future__ import annotations
 

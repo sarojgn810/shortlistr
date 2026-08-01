@@ -36,7 +36,7 @@ _ADAPTERS: dict[str, type[SourceAdapter]] = {
 
 # Legacy / optional sources — not in the default registry adapters().
 # Kept as labels for profile toggles / docs; do not re-enable without an adapter.
-# Quarantined from happy-path discovery (YC / Karpathy: short happy path).
+# Quarantined from happy-path discovery (Karpathy: short happy path).
 LEGACY_SOURCES = {
     "wellfound", "icims",
     "weworkremotely", "workingnomads", "nodesk", "jobspresso",

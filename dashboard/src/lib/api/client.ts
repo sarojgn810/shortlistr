@@ -155,7 +155,7 @@ export interface SetupStatus {
     apify?: boolean;
   };
   llm: LlmStatus;
-  /** YC demo gate — API up, DB present, LLM local-or-key, Playwright optional. */
+  /** Demo gate — API up, DB present, LLM local-or-key, Playwright optional. */
   demo?: {
     api: boolean;
     db_migrated: boolean;
