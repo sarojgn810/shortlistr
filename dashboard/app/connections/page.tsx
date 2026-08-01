@@ -8,6 +8,7 @@ import {
   Pencil, Save, X, Plus, Trash2, Download, Upload, HelpCircle, Radar,
 } from "lucide-react";
 import DashboardShell from "@/src/components/layout/DashboardShell";
+import PortalsFingerprintPanel from "@/src/components/connections/PortalsFingerprintPanel";
 import { Card } from "@/src/components/ui/Card";
 import { Button } from "@/src/components/ui/Button";
 import { useProfile } from "@/src/hooks/useProfile";
@@ -159,6 +160,10 @@ export default function ConnectionsPage() {
   const [telegramToken, setTelegramToken] = useState("");
   const [apifyToken, setApifyToken] = useState("");
   const [apifyEnabled, setApifyEnabled] = useState(false);
+  const [emailVerifyKey, setEmailVerifyKey] = useState("");
+  const [emailVerifyProvider, setEmailVerifyProvider] = useState("hunter");
+  const [serperKey, setSerperKey] = useState("");
+  const [githubToken, setGithubToken] = useState("");
   const [mcpDraft, setMcpDraft] = useState<McpServerConfig[]>([]);
   const credsInputRef = useRef<HTMLInputElement>(null);
 
@@ -179,6 +184,10 @@ export default function ConnectionsPage() {
     setTelegramToken("");
     setApifyToken("");
     setApifyEnabled(Boolean(data.apify?.enabled));
+    setEmailVerifyKey("");
+    setEmailVerifyProvider(data.email_verify?.provider || "hunter");
+    setSerperKey("");
+    setGithubToken("");
     const rec = data.local_ai?.capability?.recommended_model || data.local_ai?.model || "";
     if (rec) setLocalAiModel((cur) => cur || rec);
   }, [profile?.email]);
@@ -327,8 +336,9 @@ export default function ConnectionsPage() {
         <div className="rounded-2xl border border-mist bg-sage/20 px-5 py-4 text-base leading-relaxed text-stone">
           <p className="text-lg font-bold text-ink">Most of this is optional</p>
           <p className="mt-1.5">
-            Shortlistr finds jobs with your profile alone. Local AI can download once on this
-            computer for better scoring — no account needed. Cloud keys are an optional upgrade.
+            Shortlistr finds jobs with your profile alone. For chat and full scoring, paste a{" "}
+            <strong className="text-ink">free Groq key</strong> (fastest demo path) or set up
+            Local AI on this computer — no cloud account required for Local.
           </p>
         </div>
 
@@ -336,7 +346,7 @@ export default function ConnectionsPage() {
         <ConnectorSection
           icon={Brain}
           title="AI helper"
-          subtitle="Scores jobs and writes cover letters. Auto picks Local AI when ready, else basic scoring — or a cloud key if you add one."
+          subtitle="Prefer a free Groq key for demos, or Local AI when ready. Auto mode picks Local when installed, else basic scoring until you add a key."
         >
           {(() => {
             const la = conn?.local_ai;
@@ -639,6 +649,166 @@ export default function ConnectionsPage() {
                 >
                   Open Apify <ExternalLink size={13} />
                 </a>
+              </div>
+            </div>
+          </ConnectorRow>
+        </ConnectorSection>
+
+        {/* ── Company watchlist (ATS fingerprint) ─────────────────────── */}
+        <ConnectorSection
+          icon={Radar}
+          title="Company watchlist"
+          subtitle="Grow portals.yml from careers URLs — Greenhouse, Lever, Ashby, Workday, SmartRecruiters, Recruitee."
+          defaultOpen={false}
+        >
+          <PortalsFingerprintPanel />
+        </ConnectorSection>
+
+        {/* ── Email verify (optional, Reach out) ──────────────────────── */}
+        <ConnectorSection
+          icon={Mail}
+          title="Contact resolution (optional)"
+          subtitle="Prep → Resolve contact. SERP + email verify unlock higher hit rates — never auto-send."
+          defaultOpen={false}
+        >
+          <ConnectorRow
+            name="Hunter / NeverBounce key"
+            note="Without a key we only suggest first.last@company.com patterns. With a key, Prep can mark which look deliverable."
+            kind={conn?.email_verify?.api_key_set ? "active" : "optional"}
+            label={conn?.email_verify?.api_key_set ? "Key saved" : "Optional"}
+          >
+            <div className={formCls}>
+              <Field label="Provider">
+                <select
+                  value={emailVerifyProvider}
+                  onChange={(e) => setEmailVerifyProvider(e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="hunter">Hunter.io</option>
+                  <option value="neverbounce">NeverBounce</option>
+                </select>
+              </Field>
+              <Field label="API key" hint="Stored in your password vault — never in profile.yml.">
+                <input
+                  type="password"
+                  value={emailVerifyKey}
+                  onChange={(e) => setEmailVerifyKey(e.target.value)}
+                  placeholder={conn?.email_verify?.api_key_set ? "•••••••• (leave blank to keep)" : "Paste key"}
+                  className={inputCls}
+                  autoComplete="off"
+                />
+              </Field>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="lime"
+                  size="sm"
+                  isLoading={savingKey === "email-verify"}
+                  onClick={() =>
+                    saveConn("email-verify", {
+                      email_verify_provider: emailVerifyProvider,
+                      ...(emailVerifyKey ? { email_verify_api_key: emailVerifyKey } : {}),
+                    })
+                  }
+                >
+                  <Save size={13} /> Save
+                </Button>
+                {conn?.email_verify?.api_key_set && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      saveConn("email-verify-clear", { email_verify_api_key: "" })
+                    }
+                  >
+                    Remove key
+                  </Button>
+                )}
+              </div>
+            </div>
+          </ConnectorRow>
+
+          <ConnectorRow
+            name="Serper.dev (SERP)"
+            note="Public Google snippets for LinkedIn /in/ discovery by title ladder. Free tier available — credits expire."
+            kind={conn?.serper?.api_key_set ? "active" : "optional"}
+            label={conn?.serper?.api_key_set ? "Key saved" : "Optional"}
+          >
+            <div className={formCls}>
+              <Field label="Serper API key">
+                <input
+                  type="password"
+                  value={serperKey}
+                  onChange={(e) => setSerperKey(e.target.value)}
+                  placeholder={conn?.serper?.api_key_set ? "•••••••• (leave blank to keep)" : "Paste key"}
+                  className={inputCls}
+                  autoComplete="off"
+                />
+              </Field>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="lime"
+                  size="sm"
+                  isLoading={savingKey === "serper"}
+                  onClick={() =>
+                    saveConn("serper", {
+                      ...(serperKey ? { serper_api_key: serperKey } : {}),
+                    })
+                  }
+                >
+                  <Save size={13} /> Save
+                </Button>
+                {conn?.serper?.api_key_set && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => saveConn("serper-clear", { serper_api_key: "" })}
+                  >
+                    Remove key
+                  </Button>
+                )}
+              </div>
+            </div>
+          </ConnectorRow>
+
+          <ConnectorRow
+            name="GitHub token"
+            note="Raises rate limits for public commit-email mining. Classic PAT with public_repo read is enough."
+            kind={conn?.github?.token_set ? "active" : "optional"}
+            label={conn?.github?.token_set ? "Token saved" : "Optional"}
+          >
+            <div className={formCls}>
+              <Field label="GitHub personal access token">
+                <input
+                  type="password"
+                  value={githubToken}
+                  onChange={(e) => setGithubToken(e.target.value)}
+                  placeholder={conn?.github?.token_set ? "•••••••• (leave blank to keep)" : "ghp_…"}
+                  className={inputCls}
+                  autoComplete="off"
+                />
+              </Field>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="lime"
+                  size="sm"
+                  isLoading={savingKey === "github"}
+                  onClick={() =>
+                    saveConn("github", {
+                      ...(githubToken ? { github_token: githubToken } : {}),
+                    })
+                  }
+                >
+                  <Save size={13} /> Save
+                </Button>
+                {conn?.github?.token_set && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => saveConn("github-clear", { github_token: "" })}
+                  >
+                    Remove token
+                  </Button>
+                )}
               </div>
             </div>
           </ConnectorRow>

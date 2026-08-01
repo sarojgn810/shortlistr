@@ -109,8 +109,11 @@ def _clean_display_field(value: str) -> str:
     return v
 
 
-def enrich_job_dict(job: dict[str, Any]) -> dict[str, Any]:
-    """Fill missing company/title/location/jd from eval JSON and URL parsing."""
+def enrich_job_dict(job: dict[str, Any], *, slim: bool = False) -> dict[str, Any]:
+    """Fill missing company/title/location/jd from eval JSON and URL parsing.
+
+    ``slim=True`` (list cards): never parse full eval result_json / sanitize blocks.
+    """
     out = dict(job)
     company = _clean_display_field(str(out.get("company") or ""))
     title = _clean_display_field(str(out.get("title") or ""))
@@ -118,9 +121,11 @@ def enrich_job_dict(job: dict[str, Any]) -> dict[str, Any]:
     jd_text = str(out.get("jd_text") or "").strip()
     url = str(out.get("url") or "").strip()
 
-    eval_data = _from_eval_json(out.get("result_json"))
-    if not eval_data and out.get("eval_result_json"):
-        eval_data = _from_eval_json(out.get("eval_result_json"))
+    eval_data: dict[str, Any] = {}
+    if not slim:
+        eval_data = _from_eval_json(out.get("result_json"))
+        if not eval_data and out.get("eval_result_json"):
+            eval_data = _from_eval_json(out.get("eval_result_json"))
 
     blocks = eval_data.get("blocks") if isinstance(eval_data.get("blocks"), dict) else {}
 
@@ -143,7 +148,7 @@ def enrich_job_dict(job: dict[str, Any]) -> dict[str, Any]:
             if seg not in ("www", "jobs", "careers", "boards"):
                 company = prettify_company(seg)
 
-    if not title and jd_text and not is_boilerplate_text(jd_text):
+    if not slim and not title and jd_text and not is_boilerplate_text(jd_text):
         title = _extract_title_from_jd(jd_text)
 
     out["company"] = company or None
@@ -152,13 +157,32 @@ def enrich_job_dict(job: dict[str, Any]) -> dict[str, Any]:
     out["jd_text"] = jd_text or None
 
     if out.get("eval_score") is not None:
-        out["eval_score"] = float(out["eval_score"])
+        try:
+            out["eval_score"] = float(out["eval_score"])
+        except (TypeError, ValueError):
+            out["eval_score"] = None
     if eval_data.get("score") is not None and out.get("eval_score") is None:
-        out["eval_score"] = float(eval_data["score"])
+        try:
+            out["eval_score"] = float(eval_data["score"])
+        except (TypeError, ValueError):
+            pass
     if out.get("eval_legitimacy"):
         out["legitimacy"] = out["eval_legitimacy"]
     elif eval_data.get("legitimacy"):
         out["legitimacy"] = eval_data["legitimacy"]
+
+    # List cards: template badge from slim flag only.
+    mode_flag = out.pop("eval_mode_flag", None)
+    if slim:
+        flag_s = str(mode_flag or "").lower()
+        out["eval_template_only"] = flag_s in (
+            "template",
+            "true",
+            "1",
+            "yes",
+            "triage_skip",
+        )
+        return out
 
     if blocks:
         try:

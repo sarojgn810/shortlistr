@@ -15,6 +15,7 @@ from store.enrich import (
 from store.queries import (
     APPROVED_ONLY as _APPROVED_ONLY,
     LATEST_EVAL_JOIN,
+    LATEST_EVAL_JOIN_SLIM,
     MIN_FIT_ONLY as _MIN_FIT_ONLY,
     NO_EVAL_ARTIFACTS as _NO_EVAL_ARTIFACTS,
     RELEVANT_ONLY as _RELEVANT_ONLY,
@@ -122,7 +123,7 @@ def _parse_skills(raw: Any) -> list[str]:
 
 
 def _row_to_job_dict(row, *, slim: bool = False) -> dict[str, Any]:
-    job = enrich_job_dict(dict(row))
+    job = enrich_job_dict(dict(row), slim=slim)
     job["apply_channel"] = apply_channel_for(job)
     skills_raw = job.pop("skills_json", None)
     if "skills" not in job or not job.get("skills"):
@@ -136,6 +137,7 @@ def _row_to_job_dict(row, *, slim: bool = False) -> dict[str, Any]:
         job.pop("eval_result_json", None)
         job.pop("result_json", None)
         job.pop("metadata_json", None)
+        job.pop("eval_blocks", None)
     return job
 
 
@@ -151,6 +153,7 @@ def fetch_jobs(
 ) -> list[dict[str, Any]]:
     st = (status or "inbox").lower()
     job_cols = _LIST_JOB_COLUMNS if slim else "j.*"
+    eval_join = LATEST_EVAL_JOIN_SLIM if slim else LATEST_EVAL_JOIN
     # relevance="all" reveals off-target finds; default hides them.
     show_all = (relevance or "relevant").lower() == "all"
     rel = "" if show_all else _RELEVANT_ONLY
@@ -161,10 +164,11 @@ def fetch_jobs(
         placeholders = ",".join("?" * len(_INBOX_PIPELINE))
         query = f"""
             SELECT {job_cols}, p.status AS pipeline_status,
-                   ev.eval_score, ev.eval_legitimacy, ev.result_json AS eval_result_json
+                   ev.eval_score, ev.eval_legitimacy
+                   {", ev.eval_mode_flag" if slim else ", ev.result_json AS eval_result_json"}
             FROM pipeline p
             JOIN jobs j ON j.id = p.job_id
-            {LATEST_EVAL_JOIN}
+            {eval_join}
             WHERE p.status IN ({placeholders}) {rel} {fit} {_NO_EVAL_ARTIFACTS} {_APPROVED_ONLY}
             ORDER BY p.added_at DESC
             LIMIT ? OFFSET ?
@@ -177,10 +181,11 @@ def fetch_jobs(
     elif st == "pending":
         query = f"""
             SELECT {job_cols}, p.status AS pipeline_status,
-                   ev.eval_score, ev.eval_legitimacy, ev.result_json AS eval_result_json
+                   ev.eval_score, ev.eval_legitimacy
+                   {", ev.eval_mode_flag" if slim else ", ev.result_json AS eval_result_json"}
             FROM pipeline p
             JOIN jobs j ON j.id = p.job_id
-            {LATEST_EVAL_JOIN}
+            {eval_join}
             WHERE p.status = 'pending' {rel} {fit} {_NO_EVAL_ARTIFACTS} {_APPROVED_ONLY}
             ORDER BY p.added_at DESC
             LIMIT ? OFFSET ?
@@ -196,10 +201,11 @@ def fetch_jobs(
         # approved job sitting past row 100 was never offered for apply.
         query = f"""
             SELECT {job_cols}, p.status AS pipeline_status,
-                   ev.eval_score, ev.eval_legitimacy, ev.result_json AS eval_result_json
+                   ev.eval_score, ev.eval_legitimacy
+                   {", ev.eval_mode_flag" if slim else ", ev.result_json AS eval_result_json"}
             FROM pipeline p
             JOIN jobs j ON j.id = p.job_id
-            {LATEST_EVAL_JOIN}
+            {eval_join}
             WHERE p.status = 'approved' {rel} {fit} {_NO_EVAL_ARTIFACTS} {_APPROVED_ONLY}
             ORDER BY p.added_at DESC
             LIMIT ? OFFSET ?
@@ -213,10 +219,11 @@ def fetch_jobs(
         placeholders = ",".join("?" * len(_EVALUATED_PIPELINE))
         query = f"""
             SELECT {job_cols}, p.status AS pipeline_status,
-                   ev.eval_score, ev.eval_legitimacy, ev.result_json AS eval_result_json
+                   ev.eval_score, ev.eval_legitimacy
+                   {", ev.eval_mode_flag" if slim else ", ev.result_json AS eval_result_json"}
             FROM pipeline p
             JOIN jobs j ON j.id = p.job_id
-            {LATEST_EVAL_JOIN}
+            {eval_join}
             WHERE p.status IN ({placeholders}) {rel} {fit} {_NO_EVAL_ARTIFACTS} {_APPROVED_ONLY}
             ORDER BY p.added_at DESC
             LIMIT ? OFFSET ?
@@ -228,9 +235,10 @@ def fetch_jobs(
         params = tuple(params_list)
     else:
         query = f"""
-            SELECT {job_cols}, ev.eval_score, ev.eval_legitimacy, ev.result_json AS eval_result_json
+            SELECT {job_cols}, ev.eval_score, ev.eval_legitimacy
+                   {", ev.eval_mode_flag" if slim else ", ev.result_json AS eval_result_json"}
             FROM jobs j
-            {LATEST_EVAL_JOIN}
+            {eval_join}
             WHERE j.source != 'eval'
               {_APPROVED_ONLY}
             ORDER BY j.updated_at DESC

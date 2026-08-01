@@ -229,9 +229,55 @@ def _install_ollama() -> tuple[bool, str]:
         return False, err[-400:] or "Ollama install failed"
 
     if system == "Windows":
+        # Prefer winget so a second laptop doesn't depend on a browser download.
+        if shutil.which("winget"):
+            _write_status(
+                phase="installing",
+                message="Installing Ollama with winget…",
+                error=None,
+            )
+            try:
+                r = subprocess.run(
+                    [
+                        "winget",
+                        "install",
+                        "-e",
+                        "--id",
+                        "Ollama.Ollama",
+                        "--accept-package-agreements",
+                        "--accept-source-agreements",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=900,
+                    check=False,
+                )
+            except subprocess.TimeoutExpired:
+                return False, "Installing Ollama with winget timed out"
+            # Refresh PATH for this process if possible
+            if shutil.which("ollama"):
+                return True, "Ollama installed via winget"
+            # winget often succeeds but PATH needs a new shell — try common path
+            for candidate in (
+                os.path.expandvars(r"%LOCALAPPDATA%\Programs\Ollama\ollama.exe"),
+                r"C:\Program Files\Ollama\ollama.exe",
+            ):
+                if os.path.isfile(candidate):
+                    os.environ["PATH"] = (
+                        os.path.dirname(candidate) + os.pathsep + os.environ.get("PATH", "")
+                    )
+                    if shutil.which("ollama") or os.path.isfile(candidate):
+                        return True, "Ollama installed via winget"
+            err = (r.stderr or r.stdout or "winget install finished").strip()
+            return (
+                False,
+                "Ollama may be installed — open the Ollama app once, then click Set up Local AI again. "
+                + (err[-200:] if err else ""),
+            )
         return (
             False,
-            "Install Ollama from https://ollama.com/download (Windows), then click Set up Local AI again.",
+            "Install Ollama from https://ollama.com/download (Windows), open the app once, "
+            "then click Set up Local AI again. Or paste a free Groq API key on Connections for cloud scoring.",
         )
 
     return False, f"Automatic Ollama install is not supported on {system}"

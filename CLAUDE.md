@@ -46,7 +46,7 @@ inbox, pipeline, apply, dashboard). Concepts of "many users" belong elsewhere.
 
 - **Backend:** Python + FastAPI, served by uvicorn at `http://127.0.0.1:8787` (`make api`).
   Package root is `automation/`. CLI is `python -m automation.cli`.
-- **Store:** SQLite at `data/shortlistr.db` (`automation/store/`), schema_version **15**.
+- **Store:** SQLite at `data/shortlistr.db` (`automation/store/`), schema_version **16**.
   Optional `using_platform_db()` / `SHORTLISTR_PLATFORM_DB` exists for maintainers'
   private integrations — not part of the public single-user product.
 - **Frontend:** Next.js 15 (App Router) + TypeScript + Tailwind, at `http://localhost:3000`

@@ -45,7 +45,7 @@ def _system_prompt(tenant_id: str) -> str:
         identity = ""
 
     base = (
-        "You are Shortlistr's assistant. You know the user's profile "
+        "You are the user's job-search agent for Shortlistr. You know their profile "
         "and can take actions via tools — not just chat.\n"
         "Reply with EXACTLY ONE JSON object per turn, nothing else:\n"
         '  {"action":"answer","text":"..."}  — to reply to the user\n'
@@ -160,52 +160,67 @@ def chat(
 
 def _fallback(message: str, tenant_id: str) -> dict:
     """No-LLM command parser so basic control still works without a key."""
+    cta = (
+        "For full chat and stronger evaluations, open Connections and paste a free "
+        "Groq API key (console.groq.com), or set up Local AI."
+    )
     msg = (message or "").lower().strip()
     try:
         if "status" in msg or msg in ("how am i doing", "how's it going"):
+            snap = dispatch.call_tool("shortlistr.status", {}, tenant_id=tenant_id)
+            pipe = snap.get("pipeline") or snap.get("counts") or snap
             return {
-                "reply": json.dumps(dispatch.call_tool("shortlistr.status", {}, tenant_id=tenant_id)),
-                "actions": [{"tool": "shortlistr.status"}],
+                "reply": f"Status snapshot: {json.dumps(pipe)[:500]}\n\n{cta}",
+                "actions": [{"tool": "shortlistr.status", "result": snap}],
+                "needs_llm": True,
             }
         if "inbox" in msg or ("jobs" in msg and "prep" not in msg):
             jobs = dispatch.call_tool("shortlistr.list_jobs", {"status": "inbox"}, tenant_id=tenant_id)
             return {
-                "reply": f"{len(jobs)} jobs in inbox.",
+                "reply": f"{len(jobs)} job(s) in your inbox. Open Discover to review them.\n\n{cta}",
                 "actions": [{"tool": "shortlistr.list_jobs", "result": jobs}],
+                "needs_llm": True,
             }
         if "discover" in msg or "scan" in msg:
             res = dispatch.call_tool("shortlistr.discover", {"dry_run": True}, tenant_id=tenant_id)
             return {
-                "reply": f"Discovery (dry run): {res.get('discovered', 0)} found.",
-                "actions": [{"tool": "shortlistr.discover"}],
+                "reply": (
+                    f"Discovery dry-run found {res.get('discovered', 0)} matching role(s). "
+                    f"Use Scan on Discover to run for real.\n\n{cta}"
+                ),
+                "actions": [{"tool": "shortlistr.discover", "result": res}],
+                "needs_llm": True,
             }
         if "pipeline" in msg:
             jobs = dispatch.call_tool("shortlistr.list_jobs", {"status": "evaluated"}, tenant_id=tenant_id)
             return {
-                "reply": f"{len(jobs)} evaluated job(s) in the pipeline. Open Pipeline in the sidebar for the board.",
+                "reply": f"{len(jobs)} evaluated job(s) in the pipeline. Open Pipeline in the sidebar.\n\n{cta}",
                 "actions": [{"tool": "shortlistr.list_jobs", "result": jobs}],
+                "needs_llm": True,
             }
         if "prep" in msg:
-            # "prep <job_id>" when an id-looking token is present
             tokens = msg.replace(",", " ").split()
             job_id = next((t for t in tokens if len(t) >= 8 and t.isalnum()), None)
             if job_id:
                 res = dispatch.call_tool("shortlistr.prep", {"job_id": job_id}, tenant_id=tenant_id)
                 return {
-                    "reply": f"Prep ready for {job_id}: cover letter + guide generated.",
+                    "reply": f"Prep ready for {job_id}: cover letter + guide generated.\n\n{cta}",
                     "actions": [{"tool": "shortlistr.prep", "result": res}],
+                    "needs_llm": True,
                 }
             return {
-                "reply": "Open Prep in the sidebar, or say: prep <job_id>",
+                "reply": f"Open Prep in the sidebar, or say: prep <job_id>\n\n{cta}",
                 "actions": [],
+                "needs_llm": True,
             }
         if msg in ("whoami", "who am i", "my profile", "profile") or "who am i" in msg:
             snap = dispatch.call_tool("shortlistr.whoami", {}, tenant_id=tenant_id)
             name = snap.get("name") or "not set"
             titles = ", ".join(snap.get("target_titles") or []) or "none"
             return {
-                "reply": f"You're {name}. Targeting: {titles}.",
+                "reply": f"You're {name}. Targeting: {titles}.\n\n{cta}",
                 "actions": [{"tool": "shortlistr.whoami", "result": snap}],
+                "needs_llm": True,
             }
         if msg.startswith("approve ") or msg.startswith("skip "):
             parts = msg.split()
@@ -214,16 +229,32 @@ def _fallback(message: str, tenant_id: str) -> dict:
             if job_id:
                 res = dispatch.call_tool(tool, {"job_id": job_id}, tenant_id=tenant_id)
                 return {
-                    "reply": f"{parts[0].title()}d {job_id}.",
+                    "reply": f"{parts[0].title()}d {job_id}.\n\n{cta}",
                     "actions": [{"tool": tool, "result": res}],
+                    "needs_llm": True,
                 }
+        if msg in ("help", "?", "hi", "hello", "hey") or not msg:
+            return {
+                "reply": (
+                    "AI is not connected yet — I can still run basic commands: "
+                    "status, inbox, discover, pipeline, whoami, approve <id>, skip <id>, prep <id>.\n\n"
+                    + cta
+                ),
+                "actions": [],
+                "needs_llm": True,
+            }
     except Exception as e:
-        return {"reply": f"Error: {e}", "actions": []}
+        return {
+            "reply": f"Something went wrong: {e}\n\n{cta}",
+            "actions": [],
+            "needs_llm": True,
+        }
     return {
         "reply": (
-            "AI helper is not set up, so I can only run a few commands: "
+            "I only understand a few commands without AI: "
             "status, inbox, discover, pipeline, whoami, approve <id>, skip <id>, or prep <id>.\n\n"
-            "For full chat, open Connections and add an AI provider + key."
+            + cta
         ),
         "actions": [],
+        "needs_llm": True,
     }

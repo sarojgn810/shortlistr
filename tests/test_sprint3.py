@@ -37,7 +37,9 @@ def test_mcp_manifest_lists_core_tools():
 def test_legacy_scrapers_disabled_by_default():
     import config
 
-    assert "workday" in config.DISABLED_LEGACY_SOURCES
+    # Workday is a first-class portals.yml adapter — not legacy-disabled.
+    assert "workday" not in config.DISABLED_LEGACY_SOURCES
+    assert "workday" in config.SOURCE_ENABLED
     assert "monster" in config.DISABLED_LEGACY_SOURCES
 
 

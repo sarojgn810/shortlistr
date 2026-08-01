@@ -327,6 +327,37 @@ def evaluate_job_text(
 
     provider = get_llm()
     eval_mode = "llm"
+    triage_meta: dict[str, Any] | None = None
+    # Optional cheap gate — skip full A–G when clearly off-target.
+    try:
+        from eval.triage import run_triage, triage_enabled
+
+        if triage_enabled() and provider and provider.is_available():
+            triage_meta = run_triage(
+                jd_text=jd_text,
+                cv_text=cv,
+                company=company,
+                role=role,
+                url=url,
+            )
+            if triage_meta and triage_meta.get("proceed") is False:
+                eval_mode = "triage_skip"
+                guess = _safe_float(triage_meta.get("score_guess"), 2.0)
+                reason = str(triage_meta.get("reason") or "Triage flagged a weak fit.")
+                data = _heuristic_eval(
+                    jd_text, company=company, role=role, url=url, cv_text=cv
+                )
+                data["score"] = min(guess, 3.0)
+                data.setdefault("blocks", {})
+                data["blocks"]["G"] = (
+                    f"Two-stage triage skipped full eval: {reason} "
+                    "(turn off in Settings → Evaluation if you want full A–G every time)."
+                )
+                # Fall through to sanitize + persist below
+                provider = None  # skip full LLM path
+    except Exception:
+        triage_meta = None
+
     if provider and provider.is_available():
         data = None
         last_exc: Exception | None = None
@@ -353,7 +384,7 @@ def evaluate_job_text(
                 f"AI helper unavailable ({last_exc}). Showing basic résumé/JD overlap — "
                 "check Connections, then re-run."
             )
-    else:
+    elif eval_mode != "triage_skip":
         eval_mode = "template"
         data = _heuristic_eval(jd_text, company=company, role=role, url=url, cv_text=cv)
 
@@ -366,13 +397,16 @@ def evaluate_job_text(
     except Exception:
         pass
 
+    raw_out = {**data, "eval_mode": eval_mode}
+    if triage_meta:
+        raw_out["triage"] = triage_meta
     result = EvalResult(
         score=_safe_float(data.get("score")),
         legitimacy=str(data.get("legitimacy", "uncertain")),
         company=str(data.get("company", company)),
         role=str(data.get("role", role)),
         blocks=dict(data.get("blocks") or {}),
-        raw={**data, "eval_mode": eval_mode},
+        raw=raw_out,
         eval_mode=eval_mode,
     )
 

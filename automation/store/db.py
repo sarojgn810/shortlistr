@@ -212,6 +212,13 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         # no scan could ever start again.
         _add_column_if_missing(conn, "worker_queue", "started_at", "TEXT")
         conn.execute("UPDATE schema_version SET version = 15")
+        version = 15
+    if version < 16:
+        # Contact-resolution: company domain/MX, people, email candidates, evidence.
+        v16_path = os.path.join(MIGRATIONS_DIR, "v16.sql")
+        if os.path.exists(v16_path):
+            conn.executescript(open(v16_path, encoding="utf-8").read())
+        conn.execute("UPDATE schema_version SET version = 16")
 
 
 def _connect() -> sqlite3.Connection:

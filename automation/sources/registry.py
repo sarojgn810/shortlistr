@@ -9,7 +9,10 @@ from sources.adapters.apify_adapter import ApifyAdapter
 from sources.adapters.gmail_adapter import GmailAdapter
 from sources.adapters.linkedin_guest_adapter import LinkedInGuestAdapter
 from sources.adapters.naukri_adapter import NaukriAdapter
+from sources.adapters.recruitee_adapter import RecruiteeAdapter
 from sources.adapters.search_adapter import SearchDiscoveryAdapter
+from sources.adapters.smartrecruiters_adapter import SmartRecruitersAdapter
+from sources.adapters.teamtailor_adapter import TeamtailorAdapter
 from sources.adapters.url_resolver_adapter import UrlResolverAdapter
 from sources.adapters.watchlist_ats_adapter import WatchlistATSAdapter
 from sources.adapters.workday_adapter import WorkdayAdapter
@@ -19,6 +22,9 @@ from sources.circuit import is_open
 _ADAPTERS: dict[str, type[SourceAdapter]] = {
     "watchlist_ats": WatchlistATSAdapter,
     "workday": WorkdayAdapter,
+    "smartrecruiters": SmartRecruitersAdapter,
+    "recruitee": RecruiteeAdapter,
+    "teamtailor": TeamtailorAdapter,
     "aggregators": AggregatorsAdapter,
     "search": SearchDiscoveryAdapter,
     "naukri": NaukriAdapter,
@@ -28,9 +34,11 @@ _ADAPTERS: dict[str, type[SourceAdapter]] = {
     "linkedin_guest": LinkedInGuestAdapter,
 }
 
-# Legacy / optional sources (disabled by default)
+# Legacy / optional sources — not in the default registry adapters().
+# Kept as labels for profile toggles / docs; do not re-enable without an adapter.
+# Quarantined from happy-path discovery (YC / Karpathy: short happy path).
 LEGACY_SOURCES = {
-    "smartrecruiters", "wellfound", "icims",
+    "wellfound", "icims",
     "weworkremotely", "workingnomads", "nodesk", "jobspresso",
     "skipthedrive", "simplyhired", "monster", "glassdoor",
     "careerbuilder", "remoteco", "linkedin",
@@ -57,6 +65,13 @@ class SourceRegistry:
         # is registered and the profile didn't explicitly disable sources.
         if enabled is None and "workday" not in self.enabled:
             self.enabled.append("workday")
+        # Free SmartRecruiters / Recruitee boards from portals.yml.
+        if enabled is None and "smartrecruiters" not in self.enabled:
+            self.enabled.append("smartrecruiters")
+        if enabled is None and "recruitee" not in self.enabled:
+            self.enabled.append("recruitee")
+        if enabled is None and "teamtailor" not in self.enabled:
+            self.enabled.append("teamtailor")
         # Paid Apify always runs last so free sources fill the inbox first.
         self.enabled = _apify_last(self.enabled)
 

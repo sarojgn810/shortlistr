@@ -129,6 +129,9 @@ def get_profile_for_ui() -> dict[str, Any]:
         "llm_provider": provider,
         "llm_model": llm.get("model") or "",
         "llm_api_key_set": api_key_set,
+        "llm_two_stage_triage": str(llm.get("two_stage_triage", "")).lower()
+        in ("true", "1", "yes")
+        or llm.get("two_stage_triage") is True,
         "suggested_provider": suggested,
         "website": app.get("website", ""),
         "notice_period": app.get("notice_period", ""),
@@ -220,6 +223,18 @@ def save_profile_from_ui(body: dict[str, Any]) -> dict[str, Any]:
                 else existing_nk.get("email") or "")
     nk_email = str(nk_email or "").strip()
 
+    existing_llm = existing.get("llm") if isinstance(existing.get("llm"), dict) else {}
+    # Preserve / accept two-stage triage flag (Settings + Connections).
+    if "llm_two_stage_triage" in incoming:
+        two_stage = bool(incoming.get("llm_two_stage_triage"))
+    else:
+        two_stage = str(existing_llm.get("two_stage_triage", "")).lower() in (
+            "true",
+            "1",
+            "yes",
+        ) or existing_llm.get("two_stage_triage") is True
+    two_stage_yml = "true" if two_stage else "false"
+
     existing_email = existing.get("email") if isinstance(existing.get("email"), dict) else {}
     sender = (body.get("gmail_sender") or existing_email.get("sender") or email or "").strip()
 
@@ -256,6 +271,7 @@ llm:
   model: "{(body.get('llm_model') or '').strip()}"
   api_key: ""
   ollama_url: "http://localhost:11434"
+  two_stage_triage: {two_stage_yml}
 
 email:
   smtp_host: "smtp.gmail.com"

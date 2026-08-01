@@ -583,6 +583,8 @@ _sources = _PROFILE.get("sources") if isinstance(_PROFILE.get("sources"), dict) 
 _default_enabled = [
     "watchlist_ats",
     "workday",
+    "smartrecruiters",
+    "recruitee",
     "linkedin_guest",
     "aggregators",
     "naukri",
@@ -623,8 +625,6 @@ APIFY_SOURCE_CONFIG = {
 DISABLED_LEGACY_SOURCES = set(
     _as_list(_sources.get("disabled_legacy"))
     or [
-        "workday",
-        "smartrecruiters",
         "wellfound",
         "icims",
         "weworkremotely",
@@ -661,6 +661,9 @@ LLM_CONFIG = {
     "model":      str(_llm.get("model", "")),
     "api_key":    str(_llm.get("api_key", "")),
     "ollama_url": str(_llm.get("ollama_url", "http://localhost:11434")),
+    # Cheap triage before full A–G eval (saves tokens; default off).
+    "two_stage_triage": str(_llm.get("two_stage_triage", "false")).lower()
+    in ("true", "1", "yes"),
 }
 
 # ── Platform credentials ──────────────────────────────────────────────────────

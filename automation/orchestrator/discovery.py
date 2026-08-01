@@ -418,6 +418,19 @@ def persist_discovered(jobs: list[JobRecord], run_id: str | None = None) -> int:
         )
     if not keepers:
         return 0
+    try:
+        from models.soft_dedupe import collapse_soft_duplicates
+
+        before = len(keepers)
+        keepers = collapse_soft_duplicates(keepers)
+        if len(keepers) < before:
+            logger.info(
+                "soft_dedupe: %s → %s (company+title+location)",
+                before,
+                len(keepers),
+            )
+    except Exception as exc:
+        logger.debug("soft_dedupe skipped: %s", exc)
     n = store.upsert_jobs(keepers)
     store.add_jobs_to_pipeline([j.job_id or j.url for j in keepers])
     if run_id:

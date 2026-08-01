@@ -27,6 +27,9 @@ _SECRET_ALIASES: dict[str, tuple[str, ...]] = {
     "GMAIL_APP_PASSWORD": ("GMAIL_APP_PASSWORD", "SHORTLISTR_EMAIL_PASSWORD"),
     "TELEGRAM_BOT_TOKEN": ("TELEGRAM_BOT_TOKEN",),
     "APIFY_TOKEN": ("APIFY_TOKEN",),
+    "AUTOJOB_EMAIL_VERIFY_API_KEY": ("AUTOJOB_EMAIL_VERIFY_API_KEY", "HUNTER_API_KEY"),
+    "AUTOJOB_SERPER_API_KEY": ("AUTOJOB_SERPER_API_KEY", "SERPER_API_KEY"),
+    "AUTOJOB_GITHUB_TOKEN": ("AUTOJOB_GITHUB_TOKEN", "GITHUB_TOKEN"),
 }
 
 _WRITABLE_SECRETS = frozenset(_SECRET_ALIASES)
@@ -178,6 +181,21 @@ def get_connections_for_ui() -> dict[str, Any]:
             "token_set": _secret_set("TELEGRAM_BOT_TOKEN"),
         },
         "apify": _apify_status(data),
+        "email_verify": {
+            "api_key_set": _secret_set("AUTOJOB_EMAIL_VERIFY_API_KEY"),
+            "provider": str(
+                (data.get("email_verify") or {}).get("provider")
+                if isinstance(data.get("email_verify"), dict)
+                else "hunter"
+            )
+            or "hunter",
+        },
+        "serper": {
+            "api_key_set": _secret_set("AUTOJOB_SERPER_API_KEY"),
+        },
+        "github": {
+            "token_set": _secret_set("AUTOJOB_GITHUB_TOKEN"),
+        },
         "mcp_servers": [
             {
                 "name": str(s.get("name") or ""),
@@ -234,6 +252,22 @@ def save_connections_from_ui(body: dict[str, Any]) -> dict[str, Any]:
         _write_secret("TELEGRAM_BOT_TOKEN", body.get("telegram_bot_token"))
     if "apify_token" in body:
         _write_secret("APIFY_TOKEN", body.get("apify_token"))
+    if "email_verify_api_key" in body:
+        _write_secret("AUTOJOB_EMAIL_VERIFY_API_KEY", body.get("email_verify_api_key"))
+    if "serper_api_key" in body:
+        _write_secret("AUTOJOB_SERPER_API_KEY", body.get("serper_api_key"))
+    if "github_token" in body:
+        _write_secret("AUTOJOB_GITHUB_TOKEN", body.get("github_token"))
+
+    if "email_verify_provider" in body and body["email_verify_provider"] is not None:
+        ev = data.get("email_verify") if isinstance(data.get("email_verify"), dict) else {}
+        ev = dict(ev)
+        prov = str(body["email_verify_provider"] or "hunter").strip().lower() or "hunter"
+        if prov not in ("hunter", "neverbounce"):
+            raise ValueError("email_verify_provider must be hunter or neverbounce")
+        ev["provider"] = prov
+        data["email_verify"] = ev
+        changed_profile = True
 
     if "apify_enabled" in body and body["apify_enabled"] is not None:
         sources = data.get("sources") if isinstance(data.get("sources"), dict) else {}

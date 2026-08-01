@@ -25,11 +25,12 @@ SMARTRECRUITERS_COMPANIES = [
 ]
 
 
-def fetch_smartrecruiters_raw() -> list[JobRecord]:
+def fetch_smartrecruiters_raw(companies: list[str] | None = None) -> list[JobRecord]:
     today = datetime.now().strftime("%Y-%m-%d")
     all_jobs: list[JobRecord] = []
+    slugs = list(companies) if companies else list(SMARTRECRUITERS_COMPANIES)
 
-    for slug in SMARTRECRUITERS_COMPANIES:
+    for slug in slugs:
         try:
             url = f"https://api.smartrecruiters.com/v1/companies/{slug}/postings"
             resp = requests.get(url, params={"status": "PUBLIC", "limit": 100}, timeout=12)

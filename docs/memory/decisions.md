@@ -13,6 +13,39 @@ Template:
 
 ---
 
+## 2026-08-01 — YC demo hardening (hybrid AI + slim inbox)
+**Decision:** Inbox list uses slim SQL (score/legitimacy/mode flags only — no
+`result_json` blobs). Hybrid AI default: Local when ready, else Groq-first CTA;
+chat no-LLM path returns human replies + `needs_llm` CTA. Windows Local AI tries
+winget before browser download. Optimistic Approve/Skip; scan refetches jobs
+sparingly. Never auto-submit / never Instantly blast.
+**Why:** Second-laptop demos were failing on `/jobs` 500s, felt latency, and
+dead chat without Ollama. Failures must be loud and actionable (Karpathy/YC).
+**Touches:** `store/queries.py` (`LATEST_EVAL_JOIN_SLIM`), `jobs_api`, `enrich`,
+`agent/chat.py`, `local_ai.py`, `useJobs`, AssistantDock, GroqKeyModal, README
+demo script.
+
+## 2026-08-01 — Contact-resolution waterfall (Prep Resolve, never auto-send)
+**Decision:** Ship Stages 0–6 as an opt-in Prep action: domain+MX → ATS/JD/GitHub/SERP
+person ladder → pattern learn → permute → Hunter verify (optional) → confidence
+decision chips. Teamtailor adapter for recruiter fields. No SMTP RCPT primary;
+Proofpoint/Mimecast → ACCEPT_ALL → REVIEW/LinkedIn. Schema v16 `cr_*` tables.
+**Why:** Public ATS feeds rarely name people; single-seeker India build matches
+the research free tier without Instantly auto-blast or LinkedIn login scrape.
+**Touches:** `contacts/resolve.py`, `store/contact_resolution.py`, Prep UI,
+Connections (Serper/GitHub/Hunter), `teamtailor_adapter`.
+
+## 2026-08-01 — TrySideDoor discovery / outreach pack (no auto-send)
+**Decision:** Ship ATS fingerprint → portals merge (user confirm), SmartRecruiters +
+Recruitee adapters, soft company+title+location dedupe, email permute + optional
+paid verify (approved/evaluated only), Instantly-compatible CSV download, and
+optional two-stage LLM triage. Never Instantly/Apollo auto-blast; never invent
+SMTP RCPT as primary verify; portals.yml merge is additive only.
+**Why:** Research gap list was mostly engine work we already half-owned; UI must
+surface confirmations on Connections / Prep / Settings so cloners stay judgment-first.
+**Touches:** `sources/ats_fingerprint.py`, adapters, `soft_dedupe`, `contacts/`,
+`export/instantly_csv.py`, `eval/triage.py`, Connections + Prep + Settings UI.
+
 ## 2026-07-31 — Geo-scoped remote (not worldwide)
 **Decision:** `Remote` + city/country means remote *in that geography*. Bare
 `Remote` alone stays worldwide (`REMOTE_STRICT`). `Remote (India)` chips and

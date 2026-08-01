@@ -93,6 +93,7 @@ class ProfileSetupBody(BaseModel):
     llm_provider: Optional[str] = None
     llm_model: Optional[str] = None
     llm_api_key: Optional[str] = None
+    llm_two_stage_triage: Optional[bool] = None
     website: Optional[str] = None
     notice_period: Optional[str] = None
     current_ctc: Optional[str] = None
@@ -122,7 +123,43 @@ class ConnectionsBody(BaseModel):
     gmail_sender: Optional[str] = None
     gmail_app_password: Optional[str] = None
     telegram_bot_token: Optional[str] = None
+    apify_token: Optional[str] = None
+    apify_enabled: Optional[bool] = None
+    email_verify_api_key: Optional[str] = None
+    email_verify_provider: Optional[str] = None
+    serper_api_key: Optional[str] = None
+    github_token: Optional[str] = None
     mcp_servers: Optional[list[McpServerBody]] = None
+
+
+class PortalsFingerprintBody(BaseModel):
+    urls: list[str] = []
+    company_name: str = ""
+
+
+class PortalsApplyBody(BaseModel):
+    proposals: list[dict] = []
+
+
+class SuggestEmailsBody(BaseModel):
+    name: str = ""
+    company: str = ""
+    domain: str = ""
+    website: str = ""
+    verify: bool = False
+
+
+class ContactResolveBody(BaseModel):
+    use_serp: bool = True
+    use_github: bool = True
+    verify: bool = True
+
+
+class InstantlyExportBody(BaseModel):
+    job_id: Optional[str] = None
+    contacts: Optional[list[dict]] = None
+    company: str = ""
+    personalization: str = ""
 
 
 class ApplyAssistBody(BaseModel):
@@ -308,6 +345,38 @@ def create_app():
     except ImportError:
         pass
 
+    @app.exception_handler(Exception)
+    async def _unhandled_exception(request, exc):  # type: ignore[no-untyped-def]
+        """Always return JSON detail — empty 500s made the dashboard unusable."""
+        import logging
+        import traceback
+
+        from fastapi.responses import JSONResponse
+
+        if isinstance(exc, HTTPException):
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail, "code": "http_error"},
+            )
+        logging.getLogger(__name__).error(
+            "Unhandled API error on %s: %s\n%s",
+            getattr(request, "url", ""),
+            exc,
+            traceback.format_exc(),
+        )
+        msg = str(exc).strip() or type(exc).__name__
+        # Keep short — never dump paths/secrets.
+        if len(msg) > 280:
+            msg = msg[:277] + "…"
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": msg,
+                "code": "internal_error",
+                "hint": "Check API logs. If this persists after restart, open Connections and run doctor.",
+            },
+        )
+
     @app.get("/health")
     def health():
         from llm.status import llm_status
@@ -395,10 +464,25 @@ def create_app():
             automation, tenant_id=user.get("tenant_id", "default")
         )
 
+        llm = llm_status()
+        # Demo gate: API+DB are implied by this response; LLM is local OR any key.
+        demo = {
+            "api": True,
+            "db_migrated": checks["sqlite"],
+            "llm_available": bool(llm.get("available")),
+            "playwright_optional": bool(checks.get("playwright")),
+            "ready_for_chat": bool(llm.get("available")),
+            "hint": (
+                None
+                if llm.get("available")
+                else "Paste a free Groq key on Connections, or set up Local AI, for full chat and scoring."
+            ),
+        }
         return {
             "ready": ready,
             "checks": checks,
-            "llm": llm_status(),
+            "llm": llm,
+            "demo": demo,
             "counts": {"pipeline": pipeline_count, "jobs": job_count},
             "automation": automation,
             "cv": {**cv_settings, "ats": ats},
@@ -1148,11 +1232,30 @@ def create_app():
     ):
         from api.jobs_api import fetch_jobs
 
-        store.init_db()
-        with store.db() as conn:
-            return fetch_jobs(
-                conn, status=status, offset=offset, resolve_missing=resolve, slim=True, relevance=relevance
+        try:
+            store.init_db()
+            with store.db() as conn:
+                return fetch_jobs(
+                    conn,
+                    status=status,
+                    offset=offset,
+                    resolve_missing=resolve,
+                    slim=True,
+                    relevance=relevance,
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            import logging
+            import traceback
+
+            logging.getLogger(__name__).error(
+                "list_jobs failed: %s\n%s", e, traceback.format_exc()
             )
+            raise HTTPException(
+                500,
+                detail=f"Could not load jobs: {e}. Try restarting AutoJob; if it persists, check data/autojob.db migrations.",
+            ) from e
 
     @app.get("/jobs/{job_id}")
     def get_job(
@@ -1421,6 +1524,188 @@ def create_app():
         apps_path = export_applications()
         store.audit("sync_export", "tenant", user.get("tenant_id", "default"), {})
         return {"pipeline": pipeline_path, "applications": apps_path}
+
+    @app.post("/portals/fingerprint")
+    def portals_fingerprint(body: PortalsFingerprintBody, user: dict = Depends(_auth)):
+        """Detect public ATS boards from careers URLs (preview only)."""
+        from sources.ats_fingerprint import propose_from_urls
+
+        urls = [u.strip() for u in (body.urls or []) if str(u).strip()]
+        if not urls:
+            raise HTTPException(400, "Provide at least one careers URL")
+        if len(urls) > 25:
+            raise HTTPException(400, "Max 25 URLs per scan")
+        proposals = propose_from_urls(urls, company_name=body.company_name or "")
+        return {"proposals": proposals}
+
+    @app.post("/portals/fingerprint/apply")
+    def portals_fingerprint_apply(body: PortalsApplyBody, user: dict = Depends(_auth)):
+        """Merge confirmed ATS detections into portals.yml (additive)."""
+        _require_owner(user)
+        from sources.ats_fingerprint import apply_proposals
+
+        result = apply_proposals(list(body.proposals or []))
+        store.audit("portals_fingerprint_apply", "portals", "yml", result)
+        return result
+
+    @app.post("/jobs/{job_id}/prep/reach-out/suggest-emails")
+    def suggest_reach_out_emails(
+        job_id: str,
+        body: SuggestEmailsBody,
+        user: dict = Depends(_auth),
+    ):
+        """Permute work emails for a named contact. Verify only with Connections key."""
+        from contacts.email_find import suggest_for_contact
+        from secrets_store import get_secret
+        from store.status import StatusError, validate_job_id
+
+        try:
+            validate_job_id(job_id)
+        except StatusError as e:
+            raise HTTPException(400, str(e))
+
+        # Only for approved / evaluated pipeline rows — never blast cold lists.
+        with store.db() as conn:
+            row = conn.execute(
+                "SELECT status FROM pipeline WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()
+        status = str((row["status"] if row else "") or "").lower()
+        if status not in ("approved", "evaluated", "submitted", "responded", "interview"):
+            raise HTTPException(
+                400,
+                "Suggest emails only after the role is evaluated or approved — not from Discover.",
+            )
+
+        job: dict = {}
+        with store.db() as conn:
+            jrow = conn.execute(
+                "SELECT company FROM jobs WHERE id = ?", (job_id,)
+            ).fetchone()
+            if jrow:
+                job = dict(jrow)
+        company = (body.company or job.get("company") or "").strip()
+        name = (body.name or "").strip()
+        if not name:
+            raise HTTPException(400, "A contact name is required")
+
+        api_key = ""
+        provider = "hunter"
+        try:
+            from connections_store import get_connections_for_ui
+
+            ev = get_connections_for_ui().get("email_verify") or {}
+            provider = str(ev.get("provider") or "hunter")
+            if body.verify and ev.get("api_key_set"):
+                api_key = get_secret("AUTOJOB_EMAIL_VERIFY_API_KEY") or ""
+        except Exception:
+            pass
+
+        suggestions = suggest_for_contact(
+            name,
+            company,
+            domain=body.domain or "",
+            website=body.website or "",
+            verify=bool(body.verify and api_key),
+            api_key=api_key,
+            provider=provider,
+        )
+        return {
+            "job_id": job_id,
+            "suggestions": suggestions,
+            "verified": bool(body.verify and api_key),
+            "note": "Candidates only — review before adding. Never auto-sent.",
+        }
+
+    @app.post("/jobs/{job_id}/prep/reach-out/resolve")
+    def resolve_job_contact_endpoint(
+        job_id: str,
+        body: ContactResolveBody | None = None,
+        user: dict = Depends(_auth),
+    ):
+        """Waterfall: domain → person → email candidates + confidence (never sends)."""
+        from contacts.resolve import resolve_job_contact
+        from store.status import StatusError, validate_job_id
+
+        try:
+            validate_job_id(job_id)
+        except StatusError as e:
+            raise HTTPException(400, str(e))
+        opts = body or ContactResolveBody()
+        try:
+            return resolve_job_contact(
+                job_id,
+                use_serp=opts.use_serp,
+                use_github=opts.use_github,
+                verify=opts.verify,
+            )
+        except ValueError as e:
+            raise HTTPException(404, str(e))
+        except Exception as e:
+            raise HTTPException(500, f"Contact resolve failed: {e}")
+
+    @app.get("/jobs/{job_id}/prep/reach-out/resolve")
+    def get_job_contact_resolution(job_id: str, user: dict = Depends(_auth)):
+        from store.contact_resolution import get_job_resolution
+        from store.status import StatusError, validate_job_id
+
+        try:
+            validate_job_id(job_id)
+        except StatusError as e:
+            raise HTTPException(400, str(e))
+        data = get_job_resolution(job_id)
+        if not data:
+            return {"job_id": job_id, "status": "none", "people": [], "emails": []}
+        return data
+
+    @app.post("/export/instantly-csv")
+    def export_instantly_csv(body: InstantlyExportBody, user: dict = Depends(_auth)):
+        """Download Instantly-compatible CSV. You import it — we never auto-send."""
+        from export.instantly_csv import rows_from_contacts, to_csv
+        from fastapi.responses import Response
+        from prep.reach_out import build_reach_out
+        from store.prep_drafts import get_reach_out_saved
+
+        contacts: list[dict] = list(body.contacts or [])
+        company = body.company or ""
+        personalization = body.personalization or ""
+        if body.job_id and not contacts:
+            with store.db() as conn:
+                row = conn.execute(
+                    "SELECT * FROM jobs WHERE id = ?", (body.job_id,)
+                ).fetchone()
+            if not row:
+                raise HTTPException(404, "Job not found")
+            job = dict(row)
+            company = company or str(job.get("company") or "")
+            saved = get_reach_out_saved(body.job_id)
+            built = build_reach_out(
+                job,
+                user_contacts=saved.get("contacts"),
+                outreach_draft=saved.get("outreach_draft"),
+            )
+            contacts = list(built.get("contacts") or [])
+            if not personalization:
+                personalization = str(built.get("outreach_draft") or "")[:400]
+        rows = rows_from_contacts(
+            contacts, company=company, personalization=personalization
+        )
+        if not rows:
+            raise HTTPException(400, "No contacts with email addresses to export")
+        csv_text = to_csv(rows)
+        store.audit(
+            "instantly_csv_export",
+            "export",
+            body.job_id or "manual",
+            {"rows": len(rows)},
+        )
+        return Response(
+            content=csv_text,
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": 'attachment; filename="instantly-leads.csv"'
+            },
+        )
 
     @app.get("/jobs/{job_id}/receipts")
     def job_receipts(job_id: str, user: dict = Depends(_auth)):

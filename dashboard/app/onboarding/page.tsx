@@ -475,7 +475,7 @@ export default function OnboardingPage() {
                 <Button variant="lime">Go to Discover</Button>
               </Link>
               <Link href="/connections">
-                <Button variant="secondary">Add Apify (more jobs)</Button>
+                <Button variant="secondary">Connect free Groq AI</Button>
               </Link>
               <Link href="/connections">
                 <Button variant="secondary">Set up Local AI</Button>
@@ -484,6 +484,18 @@ export default function OnboardingPage() {
                 <Button variant="secondary">Resume</Button>
               </Link>
             </div>
+            <p className="mx-auto max-w-lg text-sm text-stone">
+              Tip for demos: a free{" "}
+              <a
+                href="https://console.groq.com/keys"
+                target="_blank"
+                rel="noreferrer"
+                className="font-bold text-ink underline"
+              >
+                Groq API key
+              </a>{" "}
+              unlocks chat and full scoring without waiting on Local AI.
+            </p>
             <p className="pt-2 text-sm text-stone">
               Manage these anytime from the sidebar —{" "}
               <Link href="/profile" className="font-bold text-ink underline">Profile</Link>,{" "}

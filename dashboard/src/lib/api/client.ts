@@ -43,6 +43,7 @@ export interface ProfileSetup {
   llm_provider: string;
   llm_model: string;
   llm_api_key_set: boolean;
+  llm_two_stage_triage?: boolean;
   suggested_provider?: string | null;
   website: string;
   notice_period: string;
@@ -119,6 +120,9 @@ export interface ConnectionsSetup {
     sender: string;
   };
   telegram: { token_set: boolean };
+  email_verify?: { api_key_set: boolean; provider: string };
+  serper?: { api_key_set: boolean };
+  github?: { token_set: boolean };
   mcp_servers: McpServerConfig[];
 }
 
@@ -133,6 +137,10 @@ export interface ConnectionsUpdate {
   telegram_bot_token?: string;
   apify_token?: string;
   apify_enabled?: boolean;
+  email_verify_api_key?: string;
+  email_verify_provider?: string;
+  serper_api_key?: string;
+  github_token?: string;
   mcp_servers?: McpServerConfig[];
 }
 
@@ -147,6 +155,15 @@ export interface SetupStatus {
     apify?: boolean;
   };
   llm: LlmStatus;
+  /** YC demo gate — API up, DB present, LLM local-or-key, Playwright optional. */
+  demo?: {
+    api: boolean;
+    db_migrated: boolean;
+    llm_available: boolean;
+    playwright_optional: boolean;
+    ready_for_chat: boolean;
+    hint?: string | null;
+  };
   counts: { pipeline: number; jobs: number };
   automation?: AutomationSettings;
   cv?: CvSettings;
@@ -471,6 +488,8 @@ export interface ChatResponse {
   reply: string;
   actions: { tool: string; result?: unknown }[];
   pending_confirm?: PendingConfirm;
+  /** True when reply came from the no-LLM fallback — show Groq / Connections CTA. */
+  needs_llm?: boolean;
 }
 
 
@@ -613,6 +632,71 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ body }),
     }),
+  suggestReachOutEmails: (
+    jobId: string,
+    body: { name: string; company?: string; domain?: string; website?: string; verify?: boolean }
+  ) =>
+    request<{
+      job_id: string;
+      suggestions: { email: string; status?: string; score?: number | null; source?: string }[];
+      verified: boolean;
+      note?: string;
+    }>(`/jobs/${jobId}/prep/reach-out/suggest-emails`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  resolveContact: (
+    jobId: string,
+    body?: { use_serp?: boolean; use_github?: boolean; verify?: boolean }
+  ) =>
+    request<import("@/src/types/job").ContactResolution>(
+      `/jobs/${jobId}/prep/reach-out/resolve`,
+      { method: "POST", body: JSON.stringify(body || {}) }
+    ),
+  getContactResolution: (jobId: string) =>
+    request<import("@/src/types/job").ContactResolution>(
+      `/jobs/${jobId}/prep/reach-out/resolve`
+    ),
+  fingerprintPortals: (urls: string[], companyName?: string) =>
+    request<{ proposals: Record<string, unknown>[] }>("/portals/fingerprint", {
+      method: "POST",
+      body: JSON.stringify({ urls, company_name: companyName || "" }),
+    }),
+  applyPortalFingerprints: (proposals: Record<string, unknown>[]) =>
+    request<{ path: string; added: number; updated: number; total: number }>(
+      "/portals/fingerprint/apply",
+      { method: "POST", body: JSON.stringify({ proposals }) }
+    ),
+  exportInstantlyCsv: async (body: {
+    job_id?: string;
+    contacts?: Record<string, unknown>[];
+    company?: string;
+    personalization?: string;
+  }) => {
+    const res = await fetch(`${env.apiUrl}/export/instantly-csv`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      let msg = res.statusText;
+      try {
+        const j = await res.json();
+        msg = formatApiErrorDetail(j.detail) || j.message || msg;
+      } catch {
+        /* ignore */
+      }
+      throw new ApiError(typeof msg === "string" ? msg : "Export failed", res.status);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "instantly-leads.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    return { ok: true as const };
+  },
   getTrackerBoard: (relevance: "relevant" | "all" = "relevant") =>
     request<import("@/src/types/job").TrackerBoard>(`/tracker/board?relevance=${relevance}`),
   listCvTemplates: () => request<{ templates: CvTemplate[] }>("/cv/templates"),

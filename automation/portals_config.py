@@ -151,6 +151,109 @@ def get_ashby_slugs() -> list[str]:
     return sorted(ashby)
 
 
+def _slug_from_smartrecruiters_url(url: str) -> str | None:
+    m = re.search(
+        r"(?:careers|jobs)\.smartrecruiters\.com/([^/?#]+)",
+        url or "",
+        re.I,
+    )
+    return m.group(1) if m else None
+
+
+def _slug_from_recruitee_url(url: str) -> str | None:
+    m = re.search(r"https?://([a-z0-9-]+)\.recruitee\.com", url or "", re.I)
+    return m.group(1) if m else None
+
+
+def get_smartrecruiters_slugs() -> list[str]:
+    """Board company tokens from portals.yml SmartRecruiters careers URLs."""
+    path = _resolve_portals_path()
+    if not path:
+        return []
+    try:
+        import yaml
+
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except Exception:
+        return []
+    out: set[str] = set()
+    for company in data.get("tracked_companies") or []:
+        if not isinstance(company, dict) or company.get("enabled") is False:
+            continue
+        url = str(company.get("api") or company.get("careers_url") or "")
+        method = str(company.get("scan_method") or "").lower()
+        slug = _slug_from_smartrecruiters_url(url)
+        if slug or method == "smartrecruiters":
+            if slug:
+                out.add(slug)
+            elif method == "smartrecruiters":
+                # Explicit method without parseable URL — try name slug
+                name = str(company.get("name") or "").strip().lower().replace(" ", "")
+                if name:
+                    out.add(name)
+    return sorted(out)
+
+
+def get_recruitee_slugs() -> list[str]:
+    path = _resolve_portals_path()
+    if not path:
+        return []
+    try:
+        import yaml
+
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except Exception:
+        return []
+    out: set[str] = set()
+    for company in data.get("tracked_companies") or []:
+        if not isinstance(company, dict) or company.get("enabled") is False:
+            continue
+        url = str(company.get("api") or company.get("careers_url") or "")
+        method = str(company.get("scan_method") or "").lower()
+        slug = _slug_from_recruitee_url(url)
+        if slug:
+            out.add(slug)
+        elif method == "recruitee":
+            name = str(company.get("name") or "").strip().lower().replace(" ", "-")
+            if name:
+                out.add(name)
+    return sorted(out)
+
+
+def _slug_from_teamtailor_url(url: str) -> str | None:
+    m = re.search(r"https?://([a-z0-9-]+)\.teamtailor\.com", url or "", re.I)
+    return m.group(1) if m else None
+
+
+def get_teamtailor_slugs() -> list[str]:
+    path = _resolve_portals_path()
+    if not path:
+        return []
+    try:
+        import yaml
+
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except Exception:
+        return []
+    out: set[str] = set()
+    for company in data.get("tracked_companies") or []:
+        if not isinstance(company, dict) or company.get("enabled") is False:
+            continue
+        url = str(company.get("api") or company.get("careers_url") or "")
+        method = str(company.get("scan_method") or "").lower()
+        slug = _slug_from_teamtailor_url(url)
+        if slug:
+            out.add(slug)
+        elif method == "teamtailor":
+            name = str(company.get("name") or "").strip().lower().replace(" ", "-")
+            if name:
+                out.add(name)
+    return sorted(out)
+
+
 def get_workday_boards() -> list[tuple[str, str, str, str]]:
     """Return Workday boards as (tenant, wd_number, site, display_name).
 
@@ -243,10 +346,14 @@ def portals_summary() -> str:
     path = _resolve_portals_path()
     gh, lever, ashby = load_portals_slugs()
     workday = get_workday_boards()
+    sr = get_smartrecruiters_slugs()
+    rt = get_recruitee_slugs()
+    tt = get_teamtailor_slugs()
     if path:
         label = "portals.yml" if path == PORTALS_PATH else "portals.example.yml (fallback)"
         return (
             f"{label}: {len(gh)} GH, {len(lever)} Lever, {len(ashby)} Ashby, "
-            f"{len(workday)} Workday boards"
+            f"{len(workday)} Workday, {len(sr)} SmartRecruiters, {len(rt)} Recruitee, "
+            f"{len(tt)} Teamtailor"
         )
     return "portals.yml: not found (no ATS watchlist slugs)"

@@ -56,7 +56,7 @@ def reload_llm_config() -> Optional[LLMProvider]:
     try:
         import config
 
-        for key in ("provider", "model", "ollama_url"):
+        for key in ("provider", "model", "ollama_url", "two_stage_triage"):
             if key in fresh:
                 config.LLM_CONFIG[key] = fresh[key]
     except Exception:

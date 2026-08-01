@@ -233,6 +233,7 @@ export function PrepDetailPanel({
             <ReachOutSection
               jobId={jobId}
               reachOut={bundle.reach_out}
+              company={bundle.company || ""}
               onUpdated={onUpdated}
             />
           )}

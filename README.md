@@ -61,6 +61,21 @@ Day-to-day setup (LLM key, Playwright, Apify, Gmail) lives in the dashboard **Co
 
 ---
 
+## YC demo script (≈5 minutes)
+
+Happy path for a live demo on a second laptop:
+
+1. **Install** — `python -m automation.cli start` (or `make start` / `start.bat`)
+2. **Onboarding** — upload CV → confirm target titles + locations → Finish
+3. **AI** — open **Connections** → paste a free [Groq API key](https://console.groq.com/keys) (or Set up Local AI). Hybrid `auto` prefers Local when ready; Groq is the fastest demo path.
+4. **Discover** — open Discover → Scan → wait for inbox cards (list stays slim — no full eval JSON blobs)
+5. **Approve** — Approve or Skip (optimistic UI; you always click Submit later)
+6. **Prep** — open an approved role → Prep for cover letter / reach-out (never auto-sent)
+
+Without an AI key, chat still answers basic commands (`status`, `inbox`, `discover`) and shows a clear CTA to Connections — it never fails silently.
+
+---
+
 ## How the pipeline works
 
 ```
@@ -83,7 +98,7 @@ Add employers in `portals.yml` (start from `templates/portals.example.yml`). Kee
 | Stays on your disk (gitignored) | Never sent to us |
 |--------------------------------|------------------|
 | `cv.md`, `config/profile.yml`, `.env` | No telemetry |
-| `portals.yml`, `data/autojob.db` | No outbound account |
+| `portals.yml`, `data/shortlistr.db` | No outbound account |
 | `reports/`, `output/`, `interview-prep/` | Secrets via `.env` / OS keychain only |
 
 A fresh clone has **placeholders only**. Do not commit résumés, phone numbers, or API keys.

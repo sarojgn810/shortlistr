@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { api } from "@/src/lib/api/client";
+import { api, ApiError } from "@/src/lib/api/client";
 import { useApiStatusStore } from "@/src/hooks/useApiStatus";
 import type { Job, ApplicationReceipt, ResumeDiff, ExplainResult } from "@/src/types/job";
 
@@ -51,9 +51,6 @@ function normalizeJob(row: Record<string, unknown>): Job {
   };
 }
 
-// Reuse the previous object when a row's rendered fields are unchanged, so a
-// background refresh does not remount every card/row (that flicker is what made
-// a polling scan look like a full page reload).
 function mergeJobs(prev: Job[], incoming: Job[]): Job[] {
   if (prev.length === 0) return incoming;
   const prevById = new Map(prev.map((j) => [j.id, j]));
@@ -80,8 +77,6 @@ function mergeJobs(prev: Job[], incoming: Job[]): Job[] {
     return same ? old : next;
   });
 
-  // Keep pages the user already loaded via "Load more" — a first-page refresh
-  // must not silently drop them.
   if (prev.length > incoming.length) {
     const incomingIds = new Set(incoming.map((j) => j.id));
     const tail = prev.slice(incoming.length).filter((j) => !incomingIds.has(j.id));
@@ -101,17 +96,16 @@ export function useJobs(status = "inbox", relevance: "relevant" | "all" = "relev
   const { setOnline, setPendingCount, refreshPendingCount } = useApiStatusStore();
   const offsetRef = useRef(0);
   const scanAbortRef = useRef(false);
+  const lastJobsFetchRef = useRef(0);
 
   const fetchJobs = useCallback(
     async (background = false) => {
       if (!background) setIsLoading(true);
       setError(null);
       try {
-        const [rows, healthy] = await Promise.all([
-          api.listJobs(status, relevance, 0),
-          api.health().then(() => true).catch(() => false),
-        ]);
-        setOnline(healthy);
+        const rows = await api.listJobs(status, relevance, 0);
+        setOnline(true);
+        lastJobsFetchRef.current = Date.now();
         const normalized = rows.map(normalizeJob);
         let addedCount = 0;
         setJobs((prev) => {
@@ -129,7 +123,6 @@ export function useJobs(status = "inbox", relevance: "relevant" | "all" = "relev
         if (!background || offsetRef.current < normalized.length) {
           offsetRef.current = normalized.length;
         }
-        // Counted in SQL, not from `normalized` — this list is one page.
         void refreshPendingCount();
         return normalized.length;
       } catch (err) {
@@ -139,7 +132,11 @@ export function useJobs(status = "inbox", relevance: "relevant" | "all" = "relev
           setJobs([]);
           setPendingCount(0);
         }
-        setError("API unreachable. Start the backend: make api");
+        const detail =
+          err instanceof ApiError
+            ? err.message
+            : "API unreachable. Start AutoJob (make start / Start app).";
+        setError(detail);
         return 0;
       } finally {
         if (!background) setIsLoading(false);
@@ -147,6 +144,17 @@ export function useJobs(status = "inbox", relevance: "relevant" | "all" = "relev
     },
     [status, relevance, setOnline, setPendingCount, refreshPendingCount]
   );
+
+  /** Instant local pipeline_status update — rollback via refetch on failure. */
+  const patchJobStatus = useCallback((jobId: string, pipelineStatus: string | null) => {
+    setJobs((prev) =>
+      prev.map((j) => (j.id === jobId ? { ...j, pipeline_status: pipelineStatus } : j))
+    );
+  }, []);
+
+  const removeJob = useCallback((jobId: string) => {
+    setJobs((prev) => prev.filter((j) => j.id !== jobId));
+  }, []);
 
   const clearNewJobCount = useCallback(() => setNewJobCount(0), []);
 
@@ -174,16 +182,16 @@ export function useJobs(status = "inbox", relevance: "relevant" | "all" = "relev
     fetchJobs();
   }, [fetchJobs]);
 
-  // Follow a running scan in the background: poll the cheap status endpoint and
-  // only merge the job list, never toggling the page-level loading state.
+  // Poll discoverStatus cheaply; refetch the job list at most every 12s while
+  // scanning (was every 4s — that made every click feel stuck behind a list reload).
   const watchScan = useCallback(async () => {
     const pollInterval = 4000;
+    const jobsMinInterval = 12000;
     const maxWaitMs = 15 * 60 * 1000;
     const startedAt = Date.now();
     scanAbortRef.current = false;
     setIsDiscovering(true);
     try {
-      // Grace period: the queue row may not be claimed the instant we return.
       let sawRunning = false;
       while (!scanAbortRef.current && Date.now() - startedAt < maxWaitMs) {
         await new Promise((r) => setTimeout(r, pollInterval));
@@ -192,11 +200,13 @@ export function useJobs(status = "inbox", relevance: "relevant" | "all" = "relev
           const st = await api.discoverStatus();
           running = st.running;
         } catch {
-          // API busy mid-scan; assume still running and retry.
           running = true;
         }
         if (running) sawRunning = true;
-        await fetchJobs(true);
+        const due = Date.now() - lastJobsFetchRef.current >= jobsMinInterval;
+        if (due || !running) {
+          await fetchJobs(true);
+        }
         if (!running && (sawRunning || Date.now() - startedAt > 20000)) break;
       }
     } finally {
@@ -222,8 +232,6 @@ export function useJobs(status = "inbox", relevance: "relevant" | "all" = "relev
     }
   };
 
-  // Attach to a scan that is already running (background scheduler, another tab,
-  // or a scan still going after a page navigation).
   useEffect(() => {
     let cancelled = false;
     api
@@ -240,6 +248,7 @@ export function useJobs(status = "inbox", relevance: "relevant" | "all" = "relev
 
   return {
     jobs,
+    setJobs,
     isLoading,
     isLoadingMore,
     hasMore,
@@ -250,6 +259,8 @@ export function useJobs(status = "inbox", relevance: "relevant" | "all" = "relev
     refetch: fetchJobs,
     loadMore,
     discover,
+    patchJobStatus,
+    removeJob,
   };
 }
 

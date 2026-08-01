@@ -114,6 +114,25 @@ LEFT JOIN (
 ) ev ON ev.job_id = j.id
 """
 
+# List views: score + legitimacy + tiny mode flags only — never full result_json.
+# json_extract on large blobs was a major Inbox latency / crash source.
+LATEST_EVAL_JOIN_SLIM = """
+LEFT JOIN (
+    SELECT job_id,
+           score AS eval_score,
+           legitimacy AS eval_legitimacy,
+           COALESCE(
+             json_extract(result_json, '$.eval_mode'),
+             json_extract(result_json, '$.template_only')
+           ) AS eval_mode_flag
+    FROM eval_results e1
+    WHERE id = (
+        SELECT id FROM eval_results e2
+        WHERE e2.job_id = e1.job_id ORDER BY id DESC LIMIT 1
+    )
+) ev ON ev.job_id = j.id
+"""
+
 LATEST_EVAL_JOIN_ON_APPLICATIONS = """
 LEFT JOIN (
     SELECT job_id, score AS eval_score, legitimacy AS eval_legitimacy, result_json

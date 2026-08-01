@@ -93,6 +93,24 @@ def test_chat_fallback_without_llm(monkeypatch):
 
     out = chat("status")
     assert out["actions"] and out["actions"][0]["tool"] == "shortlistr.status"
+    assert out.get("needs_llm") is True
+    assert "Groq" in out["reply"] or "Connections" in out["reply"]
+    # Human summary — not a raw JSON dump of the whole status blob
+    assert not out["reply"].strip().startswith("{")
+
+
+def test_chat_fallback_help_cta(monkeypatch):
+    _isolate(monkeypatch)
+    import llm
+    from store import db
+
+    db.init_db()
+    monkeypatch.setattr(llm, "get_llm", lambda: None)
+    from agent.chat import chat
+
+    out = chat("hello")
+    assert out.get("needs_llm") is True
+    assert "Groq" in out["reply"] or "console.groq.com" in out["reply"].lower()
 
 
 def test_system_prompt_includes_profile(monkeypatch):

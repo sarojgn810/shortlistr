@@ -14,6 +14,7 @@ import { useApiStatus } from "@/src/hooks/useApiStatus";
 import { useSetupStatus } from "@/src/hooks/useSetupStatus";
 import { api, type AutomationSettings } from "@/src/lib/api/client";
 import AutomationPanel from "@/src/components/settings/AutomationPanel";
+import { useProfile } from "@/src/hooks/useProfile";
 
 function HelpDetails({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -72,6 +73,8 @@ export default function SettingsPage() {
   const { online } = useApiStatus();
   const { status, isLoading, refetch } = useSetupStatus();
   const llm = status?.llm;
+  const { profile, save: saveProfile, isSaving: profileSaving } = useProfile();
+  const [triageSaving, setTriageSaving] = useState(false);
 
   const [scoring, setScoring] = useState<Pick<
     AutomationSettings,
@@ -308,6 +311,41 @@ export default function SettingsPage() {
           ) : (
             <p className="text-sm text-stone">Start Shortlistr to see AI status.</p>
           )}
+
+          {profile && (
+            <label className="mt-4 flex max-w-2xl cursor-pointer items-start gap-3 rounded-2xl border border-mist bg-sage/20 p-4">
+              <input
+                type="checkbox"
+                className="mt-1 h-5 w-5 shrink-0"
+                checked={Boolean(profile.llm_two_stage_triage)}
+                disabled={triageSaving || profileSaving}
+                onChange={async (e) => {
+                  setTriageSaving(true);
+                  try {
+                    await saveProfile({ llm_two_stage_triage: e.target.checked });
+                    toast.success(
+                      e.target.checked
+                        ? "Two-stage triage on — weak fits skip full A–G"
+                        : "Full A–G evaluation for every job"
+                    );
+                  } catch {
+                    toast.error("Couldn’t save triage setting");
+                  } finally {
+                    setTriageSaving(false);
+                  }
+                }}
+              />
+              <span>
+                <span className="block text-base font-bold text-ink">
+                  Two-stage evaluation (save tokens)
+                </span>
+                <span className="mt-1 block text-sm leading-relaxed text-stone">
+                  A short AI check runs first. Clear mismatches skip the full A–G report.
+                  Turn off if you want a full write-up every time.
+                </span>
+              </span>
+            </label>
+          )}
         </Section>
 
         {/* Your data */}
@@ -335,6 +373,13 @@ export default function SettingsPage() {
               <Download size={14} />
               Export my application list
             </Button>
+            <HelpDetails title="Instantly / outreach CSV">
+              <p>
+                From Prep → Reach out, use <strong className="text-ink">Instantly CSV</strong> to
+                download contacts you already collected. You import the file into Instantly (or any
+                sequencer) yourself — AutoJob never auto-sends email.
+              </p>
+            </HelpDetails>
           </div>
         </Section>
       </div>

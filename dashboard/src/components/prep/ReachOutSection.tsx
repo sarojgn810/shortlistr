@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ExternalLink, Linkedin, Mail, Plus, Trash2 } from "lucide-react";
+import { Download, ExternalLink, Linkedin, Mail, Plus, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { ContactResolvePanel } from "@/src/components/prep/ContactResolvePanel";
 import { Button } from "@/src/components/ui/Button";
 import { api, ApiError } from "@/src/lib/api/client";
 import type { ReachOut, ReachOutContact } from "@/src/types/job";
@@ -10,16 +11,22 @@ import type { ReachOut, ReachOutContact } from "@/src/types/job";
 interface ReachOutSectionProps {
   jobId: string;
   reachOut: ReachOut;
+  company?: string;
   onUpdated?: () => void;
 }
 
-export function ReachOutSection({ jobId, reachOut, onUpdated }: ReachOutSectionProps) {
+export function ReachOutSection({ jobId, reachOut, company = "", onUpdated }: ReachOutSectionProps) {
   const [userContacts, setUserContacts] = useState<ReachOutContact[]>(() =>
     (reachOut.contacts || []).filter((c) => c.source === "user")
   );
   const [outreach, setOutreach] = useState(reachOut.outreach_draft || "");
   const [savingContacts, setSavingContacts] = useState(false);
   const [savingOutreach, setSavingOutreach] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [suggestions, setSuggestions] = useState<
+    { email: string; status?: string; score?: number | null }[]
+  >([]);
   const [draft, setDraft] = useState({
     name: "",
     title: "",
@@ -30,10 +37,10 @@ export function ReachOutSection({ jobId, reachOut, onUpdated }: ReachOutSectionP
   useEffect(() => {
     setUserContacts((reachOut.contacts || []).filter((c) => c.source === "user"));
     setOutreach(reachOut.outreach_draft || "");
+    setSuggestions([]);
   }, [reachOut]);
 
   const jdContacts = (reachOut.contacts || []).filter((c) => c.source !== "user");
-  // Show JD + current user list (user may have added since last save load)
   const shown = [
     ...jdContacts,
     ...userContacts.filter(
@@ -106,13 +113,68 @@ export function ReachOutSection({ jobId, reachOut, onUpdated }: ReachOutSectionP
     }
   };
 
+  const handleSuggestEmails = async () => {
+    if (!draft.name.trim()) {
+      toast.error("Enter a contact name first");
+      return;
+    }
+    setSuggesting(true);
+    try {
+      const res = await api.suggestReachOutEmails(jobId, {
+        name: draft.name.trim(),
+        company: company || undefined,
+        verify: true,
+      });
+      setSuggestions(res.suggestions || []);
+      toast.success(
+        res.verified
+          ? "Suggestions ready (verified where possible)"
+          : "Pattern suggestions ready — add a verifier key on Connections for checks"
+      );
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Could not suggest emails");
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const handleExportInstantly = async () => {
+    setExporting(true);
+    try {
+      await api.exportInstantlyCsv({
+        job_id: jobId,
+        contacts: shown as unknown as Record<string, unknown>[],
+        company,
+        personalization: outreach.slice(0, 400),
+      });
+      toast.success("Downloaded Instantly CSV — import it yourself; we never auto-send");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="rounded-2xl border border-mist bg-white p-5">
-      <h3 className="text-lg font-bold text-ink">Reach out</h3>
-      <p className="mt-1 text-sm text-stone">
-        {reachOut.disclaimer ||
-          "Contacts from the job description, plus LinkedIn searches you open yourself."}
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-bold text-ink">Reach out</h3>
+          <p className="mt-1 text-sm text-stone">
+            {reachOut.disclaimer ||
+              "Contacts from the job description, plus LinkedIn searches you open yourself."}
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleExportInstantly}
+          isLoading={exporting}
+          disabled={!shown.some((c) => c.email)}
+        >
+          <Download size={13} /> Instantly CSV
+        </Button>
+      </div>
 
       {shown.length > 0 ? (
         <ul className="mt-4 space-y-3">
@@ -206,37 +268,49 @@ export function ReachOutSection({ jobId, reachOut, onUpdated }: ReachOutSectionP
         </div>
       )}
 
-      <div className="mt-5 space-y-2 rounded-xl border border-dashed border-mist p-3">
-        <p className="text-xs font-bold uppercase tracking-wide text-stone">Add a contact</p>
+      <ContactResolvePanel
+        jobId={jobId}
+        onAddContact={(c) => {
+          setUserContacts((prev) => [...prev, c]);
+          if (c.email) setDraft((d) => ({ ...d, email: c.email || "", name: c.name || d.name }));
+          toast.success("Added to your contact list — save when ready");
+        }}
+      />
+
+      <div className="mt-5 space-y-3 rounded-xl border border-dashed border-mist bg-mist/20 p-4">
+        <p className="text-sm font-bold text-ink">Add a contact</p>
         <div className="grid gap-2 sm:grid-cols-2">
           <input
             value={draft.name}
-            onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
             placeholder="Name"
-            className="rounded-xl border border-mist bg-sage/20 px-3 py-2 text-sm text-ink outline-none focus:border-lime/40"
+            className="rounded-xl border border-mist bg-white px-3 py-2 text-sm outline-none focus:border-lime/40"
           />
           <input
             value={draft.title}
-            onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-            placeholder="Title (optional)"
-            className="rounded-xl border border-mist bg-sage/20 px-3 py-2 text-sm text-ink outline-none focus:border-lime/40"
+            onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+            placeholder="Title"
+            className="rounded-xl border border-mist bg-white px-3 py-2 text-sm outline-none focus:border-lime/40"
           />
           <input
             value={draft.email}
-            onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
+            onChange={(e) => setDraft({ ...draft, email: e.target.value })}
             placeholder="Email"
-            className="rounded-xl border border-mist bg-sage/20 px-3 py-2 text-sm text-ink outline-none focus:border-lime/40"
+            className="rounded-xl border border-mist bg-white px-3 py-2 text-sm outline-none focus:border-lime/40"
           />
           <input
             value={draft.linkedin_url}
-            onChange={(e) => setDraft((d) => ({ ...d, linkedin_url: e.target.value }))}
-            placeholder="https://linkedin.com/in/…"
-            className="rounded-xl border border-mist bg-sage/20 px-3 py-2 text-sm text-ink outline-none focus:border-lime/40"
+            onChange={(e) => setDraft({ ...draft, linkedin_url: e.target.value })}
+            placeholder="LinkedIn URL"
+            className="rounded-xl border border-mist bg-white px-3 py-2 text-sm outline-none focus:border-lime/40"
           />
         </div>
-        <div className="flex flex-wrap gap-2 pt-1">
+        <div className="flex flex-wrap gap-2">
           <Button variant="secondary" size="sm" onClick={handleAdd}>
-            <Plus size={14} /> Add
+            <Plus size={13} /> Add
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleSuggestEmails} isLoading={suggesting}>
+            <Sparkles size={13} /> Suggest emails
           </Button>
           <Button
             variant="ghost"
@@ -247,6 +321,27 @@ export function ReachOutSection({ jobId, reachOut, onUpdated }: ReachOutSectionP
             Save contacts
           </Button>
         </div>
+        {suggestions.length > 0 ? (
+          <ul className="space-y-1.5 pt-1">
+            {suggestions.map((s) => (
+              <li key={s.email} className="flex flex-wrap items-center gap-2 text-xs">
+                <button
+                  type="button"
+                  className="rounded-lg border border-mist bg-white px-2 py-1 font-semibold text-ink hover:bg-sage/40"
+                  onClick={() => setDraft((d) => ({ ...d, email: s.email }))}
+                >
+                  {s.email}
+                </button>
+                {s.status ? (
+                  <span className="text-stone">
+                    {s.status}
+                    {s.score != null ? ` · ${s.score}` : ""}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
 
       <div className="mt-5">

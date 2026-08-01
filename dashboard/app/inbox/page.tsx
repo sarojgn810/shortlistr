@@ -37,6 +37,8 @@ export default function InboxPage() {
     discover,
     refetch,
     loadMore,
+    patchJobStatus,
+    removeJob,
   } = useJobs("inbox", relevance);
   const { evaluate, isEvaluating, result, reset } = useEvaluateJob();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -145,11 +147,14 @@ export default function InboxPage() {
     if (!selected || approving) return;
     const jobId = selected.id;
     setApproving(true);
+    patchJobStatus(jobId, "approved");
     try {
       await api.setPipelineStatus(jobId, "approved");
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "Could not approve");
+      patchJobStatus(jobId, selected.pipeline_status || "evaluated");
       setApproving(false);
+      void refetch(true);
       return;
     }
     // Approval already landed. Prep is best-effort: a prep failure must not make
@@ -163,22 +168,26 @@ export default function InboxPage() {
       toast.warning(`Approved, but ${msg}. You can retry prep on the job page.`);
     } finally {
       setApproving(false);
-      refetch(true);
       closeModal();
       router.push(`/prep/${jobId}`);
+      void refetch(true);
     }
   };
 
   const handleSkip = async () => {
     if (!selected || skipping) return;
+    const jobId = selected.id;
+    const prev = selected.pipeline_status;
     setSkipping(true);
+    removeJob(jobId);
+    closeModal();
     try {
-      await api.setPipelineStatus(selected.id, "skipped");
+      await api.setPipelineStatus(jobId, "skipped");
       toast.success("Skipped");
-      refetch(true);
-      closeModal();
-    } catch {
-      toast.error("Could not update status");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Could not skip");
+      void refetch(true);
+      if (prev) patchJobStatus(jobId, prev);
     } finally {
       setSkipping(false);
     }

@@ -117,6 +117,38 @@ export interface ReachOut {
   disclaimer?: string;
 }
 
+export interface ContactResolutionEmail {
+  email_id?: number;
+  person_id?: number;
+  email: string;
+  gen_method?: string;
+  verify_status?: string;
+  final_score?: number;
+  decision?: string;
+  person_name?: string;
+  linkedin_url?: string;
+}
+
+export interface ContactResolution {
+  job_id?: string;
+  status?: string;
+  people?: Record<string, unknown>[];
+  emails?: ContactResolutionEmail[];
+  company?: Record<string, unknown> | null;
+  evidence?: Record<string, unknown>[];
+  summary?: {
+    domain?: {
+      email_domain?: string;
+      mx_provider?: string;
+      is_catch_all?: number | null;
+    };
+    pattern?: { pattern?: string; confidence?: number; samples?: number };
+    notes?: string[];
+    linkedin_searches?: { label: string; url: string }[];
+    best?: ContactResolutionEmail | null;
+  };
+}
+
 export interface PrepBundle {
   job_id: string;
   company: string;
