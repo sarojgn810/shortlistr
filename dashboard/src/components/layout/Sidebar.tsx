@@ -1,9 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
-import { ShoppingBag } from "lucide-react";
 import { NAV_GROUPS, NAV_SYSTEM, type NavItem } from "@/src/config/navigation";
 
 
@@ -42,9 +42,17 @@ export default function Sidebar() {
       <aside className="fixed left-0 top-0 z-50 hidden h-screen w-56 flex-col border-r border-mist bg-white md:flex">
         {/* Logo */}
         <div className="flex items-center gap-2.5 border-b border-mist px-4 py-4">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-ink">
-            <ShoppingBag size={14} className="text-lime" strokeWidth={2.5} />
-          </div>
+          {/* The square icon, not the wordmark: the wordmark is 2:1 and needs
+              ~160px to stay legible, which is most of a 224px sidebar. The icon
+              is drawn to work small. */}
+          <Image
+            src="/icon-mark.png"
+            alt=""
+            width={28}
+            height={28}
+            priority
+            className="h-7 w-7 shrink-0"
+          />
           <span className="text-base font-bold tracking-tight text-ink">shortlistr</span>
         </div>
 
