@@ -1,0 +1,278 @@
+"""Fill empty jd_text by fetching the posting page and compressing it.
+
+Used after discovery and before eval so LinkedIn guest / search cards are not
+scored on title alone. Never submits applications.
+
+Honesty: we only keep roles whose title already matches the profile. When the
+card has no JD yet, we open the job URL and pull the description — same page a
+human would open after seeing a matching title.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from typing import Any
+
+from scrapers.browser_fetch import fetch_page
+from scrapers.html_text import html_to_markdown, html_to_plain
+
+logger = logging.getLogger(__name__)
+
+MIN_JD_CHARS = 200
+DEFAULT_LIMIT = 40
+# Prefer these when present; title-matched stubs from any source still qualify.
+_THIN_SOURCES = frozenset({
+    "LinkedIn",
+    "SearchDiscovery",
+    "Careers",
+    "Naukri",
+    "Indeed",
+    "Dice",
+    "Monster",
+    "Seek",
+    "Hacker News",
+    "Naukrigulf",
+})
+
+
+def _is_thin(jd: str | None) -> bool:
+    text = (jd or "").strip()
+    return len(text) < MIN_JD_CHARS
+
+
+def enrich_job_page(job: dict[str, Any], *, allow_browser: bool = True) -> dict[str, Any]:
+    """Fetch + compress one job URL into jd_text fields. Returns update dict."""
+    url = str(job.get("url") or "").strip()
+    out: dict[str, Any] = {"url": url, "ok": False, "error": "", "jd_text": ""}
+    if not url:
+        out["error"] = "missing url"
+        return out
+
+    page = fetch_page(url, allow_browser=allow_browser)
+    if page.error and not page.html:
+        out["error"] = page.error
+        return out
+
+    md = html_to_markdown(page.html, max_len=12000, base_url=page.final_url or url)
+    plain = html_to_plain(md, max_len=8000) if md else ""
+    if len(plain) < MIN_JD_CHARS:
+        out["error"] = page.error or "page text too short"
+        out["jd_text"] = plain
+        return out
+
+    out["ok"] = True
+    out["jd_text"] = plain
+    out["via"] = page.via
+    # Best-effort title from first markdown heading if the card title is empty.
+    if not str(job.get("title") or "").strip():
+        m = re.search(r"^#\s+(.+)$", md, re.M)
+        if m:
+            out["title"] = m.group(1).strip()[:160]
+    return out
+
+
+def _title_matches_profile(title: str, location: str, source: str) -> bool:
+    try:
+        from models.job import JobRecord
+        from pipeline.filter import passes_title_location
+
+        return passes_title_location(
+            JobRecord(
+                url="https://enrich.local/stub",
+                source=source or "LinkedIn",
+                company="",
+                title=title or "",
+                location=location or "",
+            )
+        )
+    except Exception:
+        return bool((title or "").strip())
+
+
+def rescore_fetched_jobs(limit: int = 1000) -> dict[str, int]:
+    """Re-score jobs that have a JD but are still scored as if they did not.
+
+    The enrichment pass re-scores what *it* fetches, but it only ever selects
+    rows whose jd_text is missing or short. A job whose description arrived by
+    another path — the URL resolver, the eval enricher, a source that ships it
+    inline — keeps its title-only score and the "JD not fetched yet" reason
+    forever.
+
+    Not cosmetic: those rows sit at a flat 50 or 60, so Discover cannot rank
+    them, and the UI tells the user the description has not been fetched while
+    showing them a page of it. Measured on a real inbox: 94 of 158 jobs.
+    """
+    from processors.job_filter import score_job
+    from store import db as store
+
+    store.init_db()
+    updated = 0
+    with store.db() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, title, location, source, jd_text, fit_score, fit_reason
+            FROM jobs
+            WHERE archived_at IS NULL
+              AND jd_text IS NOT NULL
+              AND length(trim(jd_text)) >= ?
+              AND fit_reason LIKE '%not fetched%'
+            LIMIT ?
+            """,
+            (MIN_JD_CHARS, limit),
+        ).fetchall()
+
+        for row in rows:
+            jd = str(row["jd_text"] or "")
+            scored = score_job({
+                "title": str(row["title"] or ""),
+                "location": str(row["location"] or ""),
+                "jd_text": jd,
+                "jd_snippet": jd[:800],
+                "source": str(row["source"] or ""),
+                "company": "",
+            })
+            fit = int(scored.get("fit_score") or 0)
+            reason = str(scored.get("fit_reason") or "")
+            if not reason:
+                continue
+            conn.execute(
+                "UPDATE jobs SET fit_score = ?, fit_reason = ?, "
+                "updated_at = datetime('now') WHERE id = ?",
+                (fit if fit > 0 else row["fit_score"], reason, row["id"]),
+            )
+            updated += 1
+
+    logger.info("Re-scored %s jobs that already had a JD", updated)
+    return {"candidates": len(rows), "rescored": updated}
+
+
+def enrich_stub_jobs(
+    *,
+    limit: int = DEFAULT_LIMIT,
+    allow_browser: bool = True,
+    sources: set[str] | None = None,
+    title_match_only: bool = True,
+) -> dict[str, int]:
+    """Persist JD text for thin rows already in SQLite.
+
+    Prefers profile title/location matches — we do not burn fetches on off-target
+    titles. After a successful fetch, re-scores fit so "JD not fetched yet" is
+    not left as the lasting reason.
+    """
+    from processors.job_filter import score_job
+    from store import db as store
+
+    store.init_db()
+    wanted = sources  # None → any source, filtered by title_match_only
+    updated = 0
+    failed = 0
+    rescored = 0
+    scanned = 0
+    skipped_off_target = 0
+
+    with store.db() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, url, title, location, source, jd_text, fit_score, fit_reason
+            FROM jobs
+            WHERE archived_at IS NULL
+              AND source != 'eval'
+              AND (jd_text IS NULL OR length(trim(jd_text)) < ?)
+            ORDER BY
+              CASE WHEN source IN ({preferred}) THEN 0 ELSE 1 END,
+              discovered_at DESC, updated_at DESC
+            LIMIT ?
+            """.format(
+                preferred=",".join("?" for _ in _THIN_SOURCES) or "''"
+            ),
+            (MIN_JD_CHARS, *sorted(_THIN_SOURCES), max(limit * 5, limit)),
+        ).fetchall()
+
+        for row in rows:
+            if scanned >= limit:
+                break
+            source = str(row["source"] or "")
+            if wanted is not None and source not in wanted:
+                continue
+            title = str(row["title"] or "")
+            location = str(row["location"] or "")
+            if title_match_only and not _title_matches_profile(title, location, source):
+                skipped_off_target += 1
+                continue
+
+            scanned += 1
+            result = enrich_job_page(dict(row), allow_browser=allow_browser)
+            if not result.get("ok"):
+                failed += 1
+                logger.debug(
+                    "JD enrich %s failed: %s", row["id"], result.get("error") or ""
+                )
+                continue
+            jd = str(result["jd_text"])
+            new_title = str(result.get("title") or "").strip()
+            scored = score_job(
+                {
+                    "title": new_title or title,
+                    "location": location,
+                    "jd_text": jd,
+                    "jd_snippet": jd[:800],
+                    "source": source,
+                    "company": "",
+                }
+            )
+            fit = int(scored.get("fit_score") or 0)
+            reason = str(scored.get("fit_reason") or "")
+            conn.execute(
+                """
+                UPDATE jobs SET
+                    jd_text = CASE
+                        WHEN jd_text IS NULL OR length(trim(jd_text)) < ? THEN ?
+                        ELSE jd_text
+                    END,
+                    title = CASE
+                        WHEN ? != '' AND (title IS NULL OR trim(title) = '') THEN ?
+                        ELSE title
+                    END,
+                    fit_score = CASE
+                        WHEN ? > 0 THEN ?
+                        ELSE fit_score
+                    END,
+                    fit_reason = CASE
+                        WHEN ? != '' THEN ?
+                        ELSE fit_reason
+                    END,
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (
+                    MIN_JD_CHARS,
+                    jd,
+                    new_title,
+                    new_title,
+                    fit,
+                    fit,
+                    reason,
+                    reason,
+                    row["id"],
+                ),
+            )
+            updated += 1
+            if fit:
+                rescored += 1
+
+    out = {
+        "scanned": scanned,
+        "updated": updated,
+        "failed": failed,
+        "rescored": rescored,
+        "skipped_off_target": skipped_off_target,
+    }
+    logger.info(
+        "JD enrich: scanned=%s updated=%s failed=%s skipped_off_target=%s",
+        scanned,
+        updated,
+        failed,
+        skipped_off_target,
+    )
+    return out

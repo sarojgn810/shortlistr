@@ -1,0 +1,40 @@
+% Shortlistr résumé skin — compiled via automation/cv (single-column ATS).
+%
+% Reactive Modern — accent stripe beside each section title, sans body.
+%
+% Look adapted from AmruthPillai/Reactive-Resume (MIT). The stripe is a \rule,
+% i.e. drawn text-layer geometry rather than an image, so nothing about it is
+% lost when the PDF is flattened to text.
+{{PREAMBLE}}
+
+% ── Look ─────────────────────────────────────────────────────────────────
+\definecolor{cvaccent}{HTML}{0E7C86}
+\definecolor{cvmuted}{HTML}{4F5B62}
+\renewcommand{\familydefault}{\sfdefault}
+
+\renewcommand{\cvsectionfont}[1]{%
+  {\color{cvaccent}\rule[-0.6pt]{3pt}{12pt}}\hspace{6pt}%
+  {\large\bfseries #1}%
+}
+\renewcommand{\cvsectionrule}{\vspace{2pt}{\color{cvaccent!25}\hrule height 1pt}}
+
+\renewcommand{\cvheader}[2]{%
+  {\fontsize{23}{26}\selectfont\bfseries #1}\par\vspace{3pt}%
+  {\small\color{cvmuted} #2}\par\vspace{5pt}%
+  {\color{cvaccent}\hrule height 2pt}%
+  \vspace{2pt}%
+}
+
+\begin{document}
+
+\cvheader{ {{NAME}} }{ {{CONTACT}} }
+
+{{SUMMARY}}
+{{SKILLS}}
+{{EXPERIENCE}}
+{{PROJECTS}}
+{{EDUCATION}}
+{{CERTIFICATIONS}}
+{{ADDITIONAL}}
+
+\end{document}

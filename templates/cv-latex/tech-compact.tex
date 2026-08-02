@@ -1,0 +1,38 @@
+% Shortlistr résumé skin — compiled via automation/cv (single-column ATS).
+%
+% Shortlistr Compact — sans, one-line header, built to hold a long career to a page.
+{{PREAMBLE}}
+
+% ── Look ─────────────────────────────────────────────────────────────────
+\definecolor{cvaccent}{HTML}{1D4ED8}
+\definecolor{cvmuted}{HTML}{475569}
+\renewcommand{\familydefault}{\sfdefault}
+
+\renewcommand{\cvsectionfont}[1]{{\normalsize\bfseries\color{cvaccent} #1}}
+\renewcommand{\cvsectionrule}{\vspace{1.5pt}{\color{cvaccent!35}\hrule height 0.8pt}}
+\renewcommand{\cvdatefont}[1]{{\footnotesize\color{cvmuted} #1}}
+\renewcommand{\cvmetafont}[1]{{\footnotesize\color{cvmuted} #1}}
+
+% Name and contact share a baseline: the fastest way to buy back vertical
+% space without touching the content.
+\renewcommand{\cvheader}[2]{%
+  \cvsplit{{\fontsize{19}{22}\selectfont\bfseries #1}}%
+          {\parbox[b]{0.52\linewidth}{\raggedleft\footnotesize\color{cvmuted} #2}}%
+  \vspace{3pt}%
+  {\color{cvaccent}\hrule height 1pt}%
+  \vspace{1pt}%
+}
+
+\begin{document}
+
+\cvheader{ {{NAME}} }{ {{CONTACT}} }
+
+{{SUMMARY}}
+{{SKILLS}}
+{{EXPERIENCE}}
+{{PROJECTS}}
+{{EDUCATION}}
+{{CERTIFICATIONS}}
+{{ADDITIONAL}}
+
+\end{document}

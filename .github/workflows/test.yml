@@ -1,0 +1,93 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # -c pins the exact set the suite is known to pass on. requirements.txt
+      # keeps `>=` floors so a human cloning this repo gets a fresh resolve;
+      # CI should not, or a dependency release turns into a mystery failure
+      # on a commit that changed nothing.
+      - run: pip install -r automation/requirements.txt -c automation/constraints.txt
+      - run: python -m playwright install chromium
+      # Cross-platform entrypoint (no `make` needed — works on Windows too).
+      - run: python -m automation.cli test
+
+  coverage:
+    # Separate from the matrix: one report is enough, and a coverage floor that
+    # has to hold on two operating systems fails for reasons unrelated to
+    # coverage. Advisory for now — it reports and does not gate, because a floor
+    # picked before anyone has looked at the number is arbitrary.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r automation/requirements.txt -c automation/constraints.txt
+      - run: pip install pytest-cov
+      - run: python -m playwright install chromium
+      - name: Tests with coverage
+        run: |
+          python -m pytest tests/ -q \
+            --cov=automation --cov-report=term-missing:skip-covered \
+            --cov-report=xml
+        env:
+          PYTHONPATH: automation
+      - name: Least-covered modules
+        if: always()
+        run: |
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse("coverage.xml").getroot()
+          rate = float(root.get("line-rate", 0)) * 100
+          print(f"\nTotal line coverage: {rate:.1f}%\n")
+          rows = sorted(
+              ((c.get("filename"), float(c.get("line-rate", 0)) * 100)
+               for p in root.iter("package") for c in p.iter("class")),
+              key=lambda r: r[1])
+          print("Least covered:")
+          for name, pct in rows[:15]:
+              print(f"  {pct:5.1f}%  {name}")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-xml
+          path: coverage.xml
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          # Resolvable only because package-lock.json is committed. It used to
+          # be gitignored, which failed this step — and therefore the whole
+          # frontend job — on every run the workflow ever had.
+          cache-dependency-path: dashboard/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm run build
+      # Runs the FE test suite once it exists (see Plan-7); no-op until then.
+      - run: npm test --if-present

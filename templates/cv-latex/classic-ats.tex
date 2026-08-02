@@ -1,0 +1,40 @@
+% Shortlistr résumé skin — compiled via automation/cv (single-column ATS).
+%
+% Classic ATS — centred name, full-width rules, serif body.
+%
+% The shape a recruiter has seen ten thousand times, which is the point: no
+% part of it makes a reader work out where to look next.
+{{PREAMBLE}}
+
+% ── Look ─────────────────────────────────────────────────────────────────
+\definecolor{cvaccent}{HTML}{000000}
+\definecolor{cvmuted}{HTML}{3D3D3D}
+
+\renewcommand{\cvsectionfont}[1]{{\large\bfseries #1}}
+\renewcommand{\cvsectionrule}{\vspace{2pt}\hrule height 0.8pt\relax}
+
+% Centring is confined to the header. Centred body text is harder to scan and
+% some extractors emit it with leading whitespace on every line.
+\renewcommand{\cvheader}[2]{%
+  \begin{center}
+    {\fontsize{22}{25}\selectfont\bfseries #1}\par\vspace{4pt}%
+    {\small #2}\par
+  \end{center}
+  \vspace{-2pt}%
+  \hrule height 1pt
+  \vspace{2pt}%
+}
+
+\begin{document}
+
+\cvheader{ {{NAME}} }{ {{CONTACT}} }
+
+{{SUMMARY}}
+{{SKILLS}}
+{{EXPERIENCE}}
+{{PROJECTS}}
+{{EDUCATION}}
+{{CERTIFICATIONS}}
+{{ADDITIONAL}}
+
+\end{document}

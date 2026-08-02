@@ -1,0 +1,39 @@
+% Shortlistr Classic — the reference design (Jake / sb2nov single-column shape).
+%
+% Nothing decorative: black text, hairline rules, mixed-case bold headings.
+% Every other Shortlistr template is this one with a different skin,
+% so if a parser handles anything it handles this.
+{{PREAMBLE}}
+
+% ── Look ─────────────────────────────────────────────────────────────────
+\definecolor{cvaccent}{HTML}{111111}
+\definecolor{cvmuted}{HTML}{555555}
+
+% Bold mixed case, never \MakeUppercase. Uppercase pairs like A-T and R-Y
+% carry a wide kern, and a PDF text extractor reads a wide enough kern as a
+% space: "EDUCATION" came back as "EDUCA TION". "Education" is just as
+% standard a heading and has no such pair.
+\renewcommand{\cvsectionfont}[1]{{\large\bfseries #1}}
+\renewcommand{\cvsectionrule}{\vspace{1.5pt}\hrule height 0.55pt\relax}
+
+% Name large, contact one line — the Jake's Resume rhythm.
+\renewcommand{\cvheader}[2]{%
+  {\fontsize{22}{26}\selectfont\bfseries #1}\par\vspace{2pt}%
+  {\small\color{cvmuted} #2}\par\vspace{3pt}%
+  \hrule height 0.8pt\relax
+  \vspace{4pt}%
+}
+
+\begin{document}
+
+\cvheader{ {{NAME}} }{ {{CONTACT}} }
+
+{{SUMMARY}}
+{{SKILLS}}
+{{EXPERIENCE}}
+{{PROJECTS}}
+{{EDUCATION}}
+{{CERTIFICATIONS}}
+{{ADDITIONAL}}
+
+\end{document}

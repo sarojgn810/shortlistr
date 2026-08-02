@@ -1,0 +1,7 @@
+Staff Platform Engineer — Remote Global
+
+Build and scale our cloud infrastructure on AWS. Lead platform initiatives,
+mentor engineers, and drive SLO/SLI frameworks. Experience with Kubernetes,
+service mesh, and infrastructure-as-code required.
+
+Remote worldwide. No visa sponsorship.

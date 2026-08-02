@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 300" width="640" height="300" role="img" aria-label="shortlistr">
+  <title>shortlistr</title>
+  <!-- A page seen edge-on: taller and wider at the outside edge. -->
+  <path d="M486 18 L636 0 L636 300 L486 274 Z" fill="#111111"/>
+  <g font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="150" font-weight="300" letter-spacing="-3">
+    <text x="16" y="196" fill="#111111">shortlist</text>
+    <text x="489" y="196" fill="#C6F24E">r</text>
+  </g>
+</svg>

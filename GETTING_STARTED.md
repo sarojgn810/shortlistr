@@ -1,0 +1,265 @@
+# Getting Started with shortlistr
+
+A local-first, judgment-first job search copilot. It finds roles, scores them
+honestly, helps you prep and fill applications — and **you** click submit. Your
+data stays on your machine.
+
+This guide takes you from a fresh clone to your first reviewed job.
+
+---
+
+## 1. Install (one time)
+
+You need **Python 3.10+** installed first (the launcher runs under Python).
+
+**Node.js is installed automatically** by `make start` / `python -m automation.cli start`
+if it is missing (Homebrew or winget when available, otherwise a portable copy under
+`.tools/`). You can also install Node 18+ yourself from [nodejs.org](https://nodejs.org).
+
+```bash
+make start            # preferred: install everything + open onboarding
+# or, if you prefer the split path:
+make install          # Python deps + Playwright Chromium
+make dashboard-install # dashboard (Next.js) deps — needs Node/npm
+```
+
+No LaTeX/MacTeX required — PDFs render through Chromium.
+
+---
+
+## 2. Start the app
+
+One command on **any OS** — installs deps, seeds files, runs API + dashboard + scheduler,
+opens onboarding:
+
+```bash
+python -m automation.cli start
+```
+
+- **Windows:** you can also double-click **`start.bat`** or run **`.\start.ps1`**.
+- **macOS/Linux:** `make start` works too (it calls the same launcher).
+
+Already installed? Skip installing with `python -m automation.cli dev` (or `make dev`).
+
+Or run the pieces yourself:
+
+```bash
+python -m automation.cli api        # backend API on http://127.0.0.1:8787
+npm --prefix dashboard run dev      # dashboard on http://localhost:3000
+```
+
+Open **http://localhost:3000/onboarding**.
+
+---
+
+## 3. Onboarding (first run)
+
+The wizard walks five steps. It only appears until you finish it; after that
+`/onboarding` sends you to your dashboard.
+
+1. **Profile** — name, contact, target titles, work mode, salary floor, and your
+   LLM choice. Saved to `config/profile.yml` (API keys go to your OS keychain, never
+   the YAML).
+2. **Resume** — upload your PDF or Word file (or paste markdown). The text is
+   extracted to `cv.md` for matching, and your original PDF is kept as-is.
+3. **Template** — pick an ATS-safe layout; preview renders live at A4.
+4. **Review** — see your setup checklist and resume, enable scheduled discovery.
+5. **Done** — jump to Discover, or manage anything later from the sidebar.
+
+---
+
+## 4. The daily loop
+
+```
+Discover → review & evaluate → approve → prep → apply assist → YOU submit
+```
+
+| Where | What you do |
+|-------|-------------|
+| **Today** (`/dashboard`) | See what needs action: new jobs, approved, active. |
+| **Discover** (`/inbox`) | Run discovery, evaluate jobs, approve or skip. Toggle **Relevant / All** to widen what you see. |
+| **Pipeline** (`/pipeline`) | Track everything: Review → Approved → Applied → Active. |
+| **Resume** (`/cv`) | Edit your resume, switch templates, download PDF, choose which resume applications send. |
+| **Profile** (`/profile`) | Personal info, job targeting, and auto-fill answers. |
+| **Connections** (`/connections`) | LLM, job sources, platforms, email, messaging, MCP. |
+| **Settings** (`/settings`) | Scheduler, scoring thresholds, data export. |
+
+---
+
+## 5. Key choices
+
+**Which resume gets sent?** On **Resume** (`/cv`), pick:
+- **My uploaded PDF** (default) — applications attach your original file, untouched.
+- **Generated template** — applications attach a tailored template PDF per job.
+
+**LLM is optional.** With a key set in **Connections**, you get full A–G evaluation
+and cover letters. Without one, the app runs in **template mode** (keyword scoring)
+so everything still works.
+
+**Discovery breadth.** Discover persists every job it finds. The inbox shows
+**Relevant** matches by default; switch to **All** to see off-target finds and
+decide for yourself. Add or remove tracked companies and sources in `portals.yml`.
+
+**If Discover looks empty, widen your titles first.** `filters.target_titles` in
+`config/profile.yml` is the very first gate — a scan fetches 10,000+ postings and
+anything whose title does not match is dropped before it is scored, so a role you
+never listed is invisible no matter how well it fits. List the *shortest* form of
+each title (matching is substring-based, so `"Site Reliability Engineer"` already
+covers Senior/Staff/Principal) and include the other names for the same work:
+
+```yaml
+filters:
+  target_titles:
+    - "Site Reliability Engineer"
+    - "Platform Engineer"
+    - "Infrastructure Engineer"
+    - "DevOps Engineer"
+  exclude_titles:        # title only — trims the management versions back out
+    - "Manager"
+    - "Director"
+```
+
+Use `exclude_titles`, **not** `deal_breakers`, for role words like *Manager* —
+`deal_breakers` also match the job description body, where most postings mention
+a manager. Restart the API after editing; the profile is read at startup.
+
+---
+
+## 6. Setting up on a second machine
+
+Cloning the repo gives you the **code only**. Everything personal is gitignored
+by design, so a fresh clone starts blank — that is the privacy guarantee, not a
+missing step.
+
+| Does not travel with the repo | What to do on the new machine |
+|-------------------------------|-------------------------------|
+| `cv.md`, your résumé PDF | Re-upload in onboarding, or copy the files across |
+| `config/profile.yml` | Re-run onboarding, or copy the file — **this holds your `target_titles`**, so a copied one saves re-tuning |
+| `data/shortlistr.db` | Left behind: jobs, evaluations, pipeline state. Copy it to keep your history |
+| `.env` / API keys | Re-enter under **Connections** (secrets live in the OS keychain, never in the repo) |
+| `portals.yml` | Copy it, or rebuild your company watchlist |
+| `output/`, `interview-prep/`, `reports/` | Generated artifacts; regenerate as needed |
+
+The quickest path: clone, run `python -m automation.cli start`, then copy
+`config/profile.yml`, `cv.md`, `portals.yml` and `data/shortlistr.db` over from
+the old machine before your first scan. Re-enter API keys in Connections.
+
+Verify with `python -m automation.cli doctor` — it checks résumé, profile,
+database, LLM, Playwright and sources, and names whatever is missing.
+
+---
+
+## 7. Start over (blank slate)
+
+```bash
+make reset            # wipes jobs, resume, profile, generated output -> backup
+```
+
+Your current data is copied to `.reset-backup/<timestamp>/` first. Your secrets
+(`.env` / keychain) and `portals.yml` are preserved. Then run `make start` and
+onboard fresh.
+
+---
+
+## 8. Uninstall / remove Shortlistr completely
+
+Use this when you want Shortlistr **off the machine**, not just a blank profile.
+
+### Guided cleanup (recommended)
+
+From the project folder:
+
+```bash
+# Stop local servers, remove cron hooks, clear Shortlistr keychain secrets,
+# and remove node_modules / build caches. Then prints the final steps.
+make uninstall
+
+# Same, but also delete résumé, profile, DB, .env, portals.yml, and backups
+# (cannot undo — only do this if you do not need that data):
+make uninstall ARGS=--purge-data
+```
+
+Windows (PowerShell), from the project folder:
+
+```powershell
+python -m automation.cli uninstall
+python -m automation.cli uninstall --purge-data
+```
+
+### Final step — delete the app folder
+
+After `make uninstall` finishes, remove the repository itself:
+
+```bash
+# macOS / Linux — run from the PARENT of the project folder
+cd ..
+rm -rf shortlistr-main    # or whatever you named the clone
+```
+
+```powershell
+# Windows — from the parent folder
+Remove-Item -Recurse -Force .\shortlistr-main
+```
+
+### Optional extras (only if you installed them for Shortlistr)
+
+```bash
+# Playwright Chromium (shared browser cache)
+python3 -m playwright uninstall chromium
+
+# Cron jobs (if you ever ran the ingest cron installer)
+bash scripts/setup-job-crons.sh --remove
+
+# Local AI models pulled via Ollama (list first, then remove what you want)
+ollama list
+ollama rm <model-name>
+```
+
+Python / Node themselves can stay — Shortlistr does not require uninstalling them.
+Pip packages from `automation/requirements.txt` are optional to remove:
+
+```bash
+pip3 uninstall -y -r automation/requirements.txt
+```
+
+(Run that **before** deleting the folder, or keep a copy of `requirements.txt`.)
+
+### What gets removed vs kept
+
+| Removed by `make uninstall` | Kept until you delete the folder | Optional / manual |
+|-----------------------------|----------------------------------|-------------------|
+| Processes on `:3000` / `:8787` | Code + templates | Playwright Chromium cache |
+| Shortlistr crontab lines | `cv.md`, profile, DB (unless `--purge-data`) | Ollama models |
+| OS keychain secrets (`shortlistr` service) | `.env` / `portals.yml` (unless `--purge-data`) | System Python / Node |
+| `dashboard/node_modules`, `.next` | | |
+
+Nothing is uploaded. After you delete the folder, Shortlistr is gone.
+
+---
+
+## 9. Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| Dashboard loads but data is empty | Start the API: `make api`. |
+| PDF won't download | Open **Connections** and install Playwright, then regenerate. |
+| Evaluations say "template mode" | Add an LLM key in **Connections**, then re-evaluate. |
+| Apply-assist can't find the form | Open the posting, click Apply, then retry. |
+| No jobs after discovery | Switch the inbox to **All**, then widen `filters.target_titles` (see §5) — titles are the first gate, so an unlisted role is dropped before scoring. Restart the API after editing. |
+| Discover full of management roles | Add them to `filters.exclude_titles` (title-only). Do **not** use `deal_breakers` for role words — those match the JD body too. |
+| Every job scores about the same | Re-evaluate: scores are derived from a met/unmet requirement list. Old rows from before that change cluster around 4. `python -m automation.cli reevaluate-stale` repairs evaluations that fell back to template mode. |
+| Prep is slow the first time | The first run renders a CV in Chromium (~15s) and may wait once on web search; later runs reuse both and take ~2s. |
+| Prep shows no reading list | Free DuckDuckGo is bot-challenged. Add a free Google Custom Search key in **Connections** — it also enables the `search` source and the "how they interview" section. |
+
+---
+
+## Where things live
+
+- `config/profile.yml` — your profile (gitignored).
+- `cv.md` + `resume.pdf` — your resume content and original file (gitignored).
+- `data/shortlistr.db` — local SQLite store for jobs, pipeline, applications.
+- `portals.yml` — tracked companies and discovery sources.
+- `.env` — secrets (or use the OS keychain).
+- `output/` — generated resume PDFs.
+
+Everything runs on your machine. Nothing is uploaded.

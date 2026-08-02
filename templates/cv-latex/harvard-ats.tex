@@ -1,0 +1,36 @@
+% Shortlistr résumé skin — compiled via automation/cv (single-column ATS).
+%
+% Harvard ATS — centred header, unruled bold headings, serif.
+%
+% The résumé shape university career offices teach. Plainest possible markup:
+% no colour at all, which is also what a few older enterprise parsers prefer.
+{{PREAMBLE}}
+
+% ── Look ─────────────────────────────────────────────────────────────────
+\definecolor{cvaccent}{HTML}{000000}
+\definecolor{cvmuted}{HTML}{333333}
+
+\renewcommand{\cvsectionfont}[1]{{\normalsize\bfseries #1}}
+\renewcommand{\cvsectionrule}{\vspace{1pt}\hrule height 0.4pt\relax}
+
+\renewcommand{\cvheader}[2]{%
+  \begin{center}
+    {\fontsize{20}{23}\selectfont\bfseries #1}\par\vspace{3pt}%
+    {\footnotesize #2}\par
+  \end{center}
+  \vspace{1pt}%
+}
+
+\begin{document}
+
+\cvheader{ {{NAME}} }{ {{CONTACT}} }
+
+{{SUMMARY}}
+{{SKILLS}}
+{{EXPERIENCE}}
+{{PROJECTS}}
+{{EDUCATION}}
+{{CERTIFICATIONS}}
+{{ADDITIONAL}}
+
+\end{document}

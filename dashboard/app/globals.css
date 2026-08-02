@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-sage: #f3f6f2;
+  --surface-mist: #ecefe9;
+  --accent-lime: #dfff5e;
+  --accent-orange: #ff6b4a;
+  --text-ink: #1a1a1a;
+  --text-stone: #666666;
+  --background: var(--bg-sage);
+  --foreground: var(--text-ink);
+
+  /* Semantic tokens. Values match the Tailwind palette they replace so the
+     look is unchanged — they just give success/warning/danger real names. Each
+     has a soft fill (badge background) + ink (text/border on that fill). */
+  --success-soft: #dcfce7;
+  --success-ink: #15803d;
+  --warning-soft: #fef9c3;
+  --warning-ink: #a16207;
+  --danger-soft: #fee2e2;
+  --danger-ink: #b91c1c;
+  /* Readable dark lime for accent text/icons (the brand lime is too light). */
+  --accent-lime-ink: #4d7c0f;
+}
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(102, 102, 102, 0.25);
+    border-radius: 999px;
+  }
+}
