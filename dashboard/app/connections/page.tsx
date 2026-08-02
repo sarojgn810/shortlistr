@@ -282,11 +282,29 @@ export default function ConnectionsPage() {
   const [googleCseKey, setGoogleCseKey] = useState("");
   const [searchTest, setSearchTest] = useState<{ ok: boolean; message: string } | null>(null);
   const [testingSearch, setTestingSearch] = useState(false);
+  const [llmTest, setLlmTest] = useState<{ ok: boolean; message: string } | null>(null);
+  const [testingLlm, setTestingLlm] = useState(false);
   const [googleCseCx, setGoogleCseCx] = useState("");
 
   // "Saved" is not "working": a key can be an OAuth client ID, belong to a
   // project without the API enabled, or be restricted to other APIs. One real
   // query tells the difference in a second instead of hours later.
+  const runLlmTest = async () => {
+    setTestingLlm(true);
+    setLlmTest(null);
+    try {
+      const res = await api.testLlm();
+      setLlmTest({ ok: res.ok, message: res.message });
+    } catch (e) {
+      setLlmTest({
+        ok: false,
+        message: e instanceof ApiError ? e.message : "Could not reach the API",
+      });
+    } finally {
+      setTestingLlm(false);
+    }
+  };
+
   const runSearchTest = async () => {
     setTestingSearch(true);
     setSearchTest(null);
@@ -482,11 +500,18 @@ export default function ConnectionsPage() {
   };
 
   const llmKind: StatusKind =
-    llmStatus?.available ? "active" :
-    profile?.llm_api_key_set ? "missing" :
+    llmTest?.ok ? "active" :
+    llmTest && !llmTest.ok ? "missing" :
+    llmStatus?.available ? "optional" :
     "missing";
+  // "Ready" used to mean is_available(), which only checks that a key is
+  // present — a revoked, out-of-quota or wrong-provider key read as connected
+  // until the first evaluation silently fell back. Saved is what we know;
+  // Connected is what Test it proves.
   const llmLabel =
-    llmStatus?.available ? "Ready" :
+    llmTest?.ok ? "Connected" :
+    llmTest && !llmTest.ok ? "Not working" :
+    llmStatus?.available ? "Key saved · not tested" :
     llmStatus?.mode === "template" ? "Using basic mode" :
     "Not set up";
 
@@ -674,9 +699,32 @@ export default function ConnectionsPage() {
             label={llmLabel}
           >
             {!editingLlm ? (
-              <Button variant="secondary" size="sm" onClick={startLlmEdit}>
-                <Pencil size={13} /> Change
-              </Button>
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="secondary" size="sm" onClick={startLlmEdit}>
+                    <Pencil size={13} /> Change
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    isLoading={testingLlm}
+                    onClick={runLlmTest}
+                  >
+                    Test it
+                  </Button>
+                </div>
+                {llmTest && (
+                  <div
+                    className={`rounded-xl border p-3 text-sm leading-relaxed ${
+                      llmTest.ok
+                        ? "border-lime/40 bg-lime/10 text-ink"
+                        : "border-orange/40 bg-orange/10 text-ink"
+                    }`}
+                  >
+                    {llmTest.message}
+                  </div>
+                )}
+              </div>
             ) : (
               <div className={formCls}>
                 <Field label="Which AI do you want to use?">
