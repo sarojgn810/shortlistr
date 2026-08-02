@@ -107,8 +107,14 @@ def test_pending_count_survives_the_page_boundary(isolated_data_dir):
 def test_pending_count_applies_the_same_gate_as_the_inbox(isolated_data_dir):
     """A number next to a list has to count the rows in that list.
 
-    Off-target and low-fit jobs are hidden from the inbox, so counting them would
-    send the user looking for jobs no view will show them.
+    Off-target jobs are hidden from the inbox, so counting them would send the
+    user looking for jobs no view will show them.
+
+    Low-fit jobs are a different matter and this test used to have it wrong. The
+    inbox deliberately does not hide them — api/jobs_api.py sets its fit filter
+    to "" so a rescored keeper never vanishes from Discover on its own — while
+    the count applied a fit floor. Discover showed 16 pending and Today said 15,
+    and the one it dropped was a relevant job scoring 20.
     """
     from store.status import pipeline_status_counts
 
@@ -117,7 +123,7 @@ def test_pending_count_applies_the_same_gate_as_the_inbox(isolated_data_dir):
     _seed(30, fit=10, prefix="cccc")
 
     counts = pipeline_status_counts(targeted=True)
-    assert counts["pending"] == 5
+    assert counts["pending"] == 35, "off-target excluded, low-fit counted"
     # The raw breakdown is deliberately different: it answers "what is in the DB".
     assert pipeline_status_counts()["pending"] == 75
 
