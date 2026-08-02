@@ -6,6 +6,8 @@ Deterministic — no LLM required. Packs mirror how recruiters actually search
 
 from __future__ import annotations
 
+import re
+
 ROLE_PACKS: dict[str, dict] = {
     "sre": {
         "id": "sre",
@@ -309,6 +311,20 @@ def get_role(role_id: str | None = None) -> dict:
                 seen.add(low)
                 merged.append(t)
             pack["search_titles"] = merged
+
+            # The pack is a bundle of keywords and advice for a job family; its
+            # label is that family's name ("Site Reliability / Platform"), not
+            # the job the user is going for. Showing it as the target read as
+            # the tool ignoring the titles they had already given it.
+            primary = profile_titles[0]
+            pack["family_label"] = pack.get("label")
+            pack["label"] = primary
+            template = str(pack.get("headline_template") or "")
+            if template:
+                # Same reason: the template hard-codes the family's job title.
+                pack["headline_template"] = re.sub(
+                    r"(?<=\{seniority\})[^|]+", f"{primary} ", template, count=1
+                )
         return pack
     fallback = role_from_profile()
     if fallback in ROLE_PACKS:

@@ -57,6 +57,30 @@ def _is_stale_draft(data: dict[str, Any]) -> bool:
     return False
 
 
+def _repair_stored_profile(data: dict[str, Any]) -> None:
+    """Drop stored fields an older parser filled in wrongly.
+
+    A saved draft outlives the code that wrote it. An earlier parser took "a
+    line under 60 characters containing a comma" as the location, which stored
+    "**Site Reliability Engineer" — and because the draft is read straight back,
+    the LinkedIn page kept showing it long after the parser was fixed.
+
+    Only values that fail today's validation are cleared, so a correct one is
+    never thrown away, and the field simply re-fills on the next import.
+    """
+    profile = data.get("profile")
+    if not isinstance(profile, dict):
+        return
+    from linkedin_optimizer.parser import looks_like_location, looks_like_person_name
+
+    location = str(profile.get("location") or "").strip()
+    if location and not looks_like_location(location):
+        profile["location"] = ""
+    name = str(profile.get("name") or "").strip()
+    if name and not looks_like_person_name(name):
+        profile["name"] = ""
+
+
 def _load_draft() -> dict[str, Any]:
     if not os.path.isfile(DRAFT_PATH):
         return {}
@@ -67,6 +91,7 @@ def _load_draft() -> dict[str, Any]:
             return {}
         if _is_stale_draft(data):
             return {}
+        _repair_stored_profile(data)
         return data
     except Exception:
         return {}

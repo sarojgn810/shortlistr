@@ -99,19 +99,24 @@ def pipeline_status_counts(*, targeted: bool = False) -> dict[str, int]:
     """
     from store.queries import (
         APPROVED_ONLY,
-        MIN_FIT_ONLY,
         NO_EVAL_ARTIFACTS,
         RELEVANT_ONLY,
-        min_fit_threshold,
     )
 
     if targeted:
+        # Exactly the gate api/jobs_api.py uses to build the list, and no more.
+        #
+        # This used to add MIN_FIT_ONLY, which the list deliberately omits —
+        # min-fit is a client-side filter there so a rescored keeper never
+        # vanishes from Discover on its own. The count was therefore stricter
+        # than the page it was counting: Discover showed 16 pending and Today
+        # said 15, and the missing one was a relevant job scoring 20.
         sql = (
             "SELECT p.status, COUNT(*) AS c FROM pipeline p JOIN jobs j ON j.id = p.job_id "
-            f"WHERE 1 = 1 {RELEVANT_ONLY} {MIN_FIT_ONLY} {NO_EVAL_ARTIFACTS} {APPROVED_ONLY} "
+            f"WHERE 1 = 1 {RELEVANT_ONLY} {NO_EVAL_ARTIFACTS} {APPROVED_ONLY} "
             "GROUP BY p.status"
         )
-        params: tuple = (min_fit_threshold(),)
+        params: tuple = ()
     else:
         sql = "SELECT status, COUNT(*) AS c FROM pipeline GROUP BY status"
         params = ()
