@@ -52,7 +52,12 @@ export default function AssistantDock() {
       if (res.pending_confirm) setPending(res.pending_confirm);
       if (res.needs_llm) setNeedsLlmBanner(true);
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "Chat failed");
+      // Put the failure in the transcript, not only in a toast. A toast fades
+      // after a few seconds and leaves the user's message sitting there with no
+      // reply, which is indistinguishable from the chat silently not working.
+      const why = e instanceof ApiError ? e.message : "Something went wrong sending that.";
+      setMessages((m) => [...m, { role: "assistant", content: `\u26a0 ${why}` }]);
+      toast.error(why);
     } finally {
       setBusy(false);
     }
