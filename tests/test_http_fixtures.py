@@ -145,7 +145,11 @@ def test_pipeline_counts_targeted_vs_raw(isolated_data_dir, monkeypatch):
         store.add_to_pipeline(job.job_id)
 
     assert pipeline_status_counts()["pending"] == 3
-    assert pipeline_status_counts(targeted=True)["pending"] == 1
+    # Two, not one: the off-target job is hidden from Discover so it must not be
+    # counted, but the low-fit relevant one (fit 5) is still listed there —
+    # api/jobs_api.py applies no fit floor on purpose — so counting it is what
+    # makes the badge match the page.
+    assert pipeline_status_counts(targeted=True)["pending"] == 2
 
 
 def test_min_fit_threshold_respects_zero(monkeypatch):

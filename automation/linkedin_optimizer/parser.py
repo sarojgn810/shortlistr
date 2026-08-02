@@ -114,7 +114,10 @@ def parse_profile_text(text: str) -> dict[str, Any]:
         if key == "experience":
             profile["experience"] = _parse_experience(body)
         elif key == "skills":
-            parts = re.split(r"[,•\n|/]+", body)
+            # Not "/": it is part of the skill, not a separator between two.
+            # Splitting on it turned "CI/CD Integration" into "CI" and "CD
+            # Integration", and "SLO / SLI / Error Budgets" into three.
+            parts = re.split(r"[,•\n|]+", body)
             profile["skills"] = [p.strip() for p in parts if p.strip()]
         elif key == "headline":
             profile["headline"] = body.strip()[:220]
