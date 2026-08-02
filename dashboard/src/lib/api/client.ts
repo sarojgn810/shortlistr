@@ -481,14 +481,53 @@ function formatApiErrorDetail(detail: unknown): string {
   return JSON.stringify(detail);
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${env.apiUrl}${path}`, {
-    ...init,
-    headers: {
-      ...authHeaders(),
-      ...init?.headers,
-    },
-  });
+/** Nothing here should be able to hang forever.
+ *
+ * fetch has no default timeout, so an API that accepts the connection and then
+ * stops answering leaves the caller awaiting indefinitely. In the chat dock
+ * that meant `busy` stayed true, the input stayed disabled, and the message sat
+ * there with no reply and no error — which reads as the chat being broken
+ * rather than slow.
+ *
+ * 30s covers ordinary calls; the chat passes a longer one because a real model
+ * reply can legitimately take a while.
+ */
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+async function request<T>(
+  path: string,
+  init?: RequestInit & { timeoutMs?: number },
+): Promise<T> {
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, ...rest } = init || {};
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res: Response;
+  try {
+    res = await fetch(`${env.apiUrl}${path}`, {
+      ...rest,
+      signal: controller.signal,
+      headers: {
+        ...authHeaders(),
+        ...rest?.headers,
+      },
+    });
+  } catch (e) {
+    // Distinguish "took too long" from "could not reach it at all" — the fixes
+    // are different and "Failed to fetch" tells the user neither.
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new ApiError(
+        `The API did not respond within ${Math.round(timeoutMs / 1000)}s. It may still be starting up.`,
+        0,
+      );
+    }
+    throw new ApiError(
+      "Could not reach the Shortlistr API. Is it still running on port 8787?",
+      0,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -500,6 +539,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       }
     } catch {
       /* keep raw text */
+    }
+    // The dashboard talks to the API through a Next rewrite, so an API that is
+    // down does not fail the fetch — the proxy answers 500/502/504 with a body
+    // that says nothing. "Internal Server Error" then reads as a bug in the app
+    // rather than a service that is not running.
+    const proxyBlind =
+      (res.status === 500 && (!text || text === "Internal Server Error")) ||
+      res.status === 502 ||
+      res.status === 503 ||
+      res.status === 504;
+    if (proxyBlind) {
+      message =
+        "Could not reach the Shortlistr API. Check it is running on port 8787 — " +
+        "if you started the app with `automation.cli start`, look for errors in that window.";
     }
     throw new ApiError(message, res.status);
   }
@@ -534,7 +587,13 @@ export const api = {
     history?: ChatTurn[];
     confirm_tool?: string;
     confirm_args?: Record<string, unknown>;
-  }) => request<ChatResponse>("/agent/chat", { method: "POST", body: JSON.stringify(body) }),
+  }) =>
+    request<ChatResponse>("/agent/chat", {
+      method: "POST",
+      body: JSON.stringify(body),
+      // A model reply is allowed to be slow; a hang is not.
+      timeoutMs: 90_000,
+    }),
   setupStatus: () => request<SetupStatus>("/setup/status"),
   getProfile: () => request<ProfileSetup>("/setup/profile"),
   saveProfile: (body: Partial<ProfileSetup> & { llm_api_key?: string; target_titles?: string[] }) =>
