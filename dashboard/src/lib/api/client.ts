@@ -543,6 +543,11 @@ export const api = {
       body: JSON.stringify(body),
     }),
   getConnections: () => request<ConnectionsSetup>("/setup/connections"),
+  testLlm: () =>
+    request<{ ok: boolean; provider?: string; model?: string; message: string }>(
+      "/setup/connections/test-llm",
+      { method: "POST" },
+    ),
   testSearch: () =>
     request<{ ok: boolean; backend: string; message: string }>(
       "/setup/connections/test-search",
