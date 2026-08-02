@@ -84,6 +84,82 @@ def _unspace_line(line: str) -> str:
     return marker + " ".join(w for w in words if w)
 
 
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def normalize_spacing(text: str) -> str:
+    """Put back spaces a design-heavy PDF never wrote.
+
+    Typeset résumés place glyphs by position, so a contact row can carry no
+    space characters at all and still look spaced on the page. pdfplumber
+    reports what is actually in the file, which is why a real CV extracted as:
+
+        Bangalore,India•+918884311573•realsarojnayak@gmail.com
+        Feb2024–Present
+
+    That is not a reader bug — the raw text is the same before and after the
+    letter-spacing repair — but it reaches the rendered PDF, so it is worth
+    correcting where the fix is unambiguous.
+
+    Only clear cases are touched: separator bullets, a comma butted against a
+    word, and a month butted against a year. Decimals, URLs and version numbers
+    are left alone.
+    """
+    if not text:
+        return text
+
+    # Bullet and pipe separators used between contact fields. Horizontal space
+    # only: \s* would swallow the newline before a bullet that starts a list
+    # item and fold the whole list onto one line.
+    text = re.sub(r"[ \t]*([•·|])[ \t]*", r" \1 ", text)
+    # "Bangalore,India" — but not "1,200" or "a, b" which are already fine.
+    text = re.sub(r"(?<=[A-Za-z]),(?=[A-Za-z])", ", ", text)
+    # "Feb2024" -> "Feb 2024". Anchored to real month names so "H2024" and
+    # "COVID19" are untouched.
+    text = re.sub(rf"\b({'|'.join(_MONTHS)})(?=\d{{4}}\b)", r"\1 ", text)
+    # Runs of spaces the substitutions may have doubled up.
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    return text
+
+
+def rejoin_wrapped_lines(text: str) -> str:
+    """Undo the hard wrapping a PDF page imposes on a flowing paragraph.
+
+    A PDF has no paragraphs, only lines placed on a page, so a sentence that
+    wrapped in the layout arrives with a newline in the middle of it:
+
+        ... and Agentic AI —
+        building LLM-powered autonomous incident response ...
+
+    Rendered back out, that break appears mid-sentence for no reason.
+
+    Only an unambiguous continuation is joined: the next line must begin with a
+    lowercase letter, and the current one must not end a sentence. Headings,
+    list items, table rows and blank lines are left exactly as they are, so
+    document structure cannot be damaged by this.
+    """
+    lines = (text or "").split("\n")
+    out: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        prev = out[-1].strip() if out else ""
+        continues = (
+            out
+            and prev
+            and stripped
+            and stripped[0].islower()
+            and not prev.endswith((".", "!", "?", ":", ";"))
+            and not prev.startswith(("#", "-", "*", ">", "|"))
+            and not stripped.startswith(("#", "-", "*", ">", "|"))
+        )
+        if continues:
+            out[-1] = out[-1].rstrip() + " " + stripped
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
 def repair_letter_spacing(text: str) -> str:
     """Undo per-glyph spacing, line by line, leaving normal lines untouched.
 
@@ -147,7 +223,9 @@ def extract_pdf_text(data: bytes) -> str:
             errors.append(f"{reader.__name__}: {e}")
             continue
         if text.strip():
-            return repair_letter_spacing(text)
+            return rejoin_wrapped_lines(
+                normalize_spacing(repair_letter_spacing(text))
+            )
 
     if errors:
         raise RuntimeError(
