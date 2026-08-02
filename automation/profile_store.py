@@ -24,8 +24,18 @@ def _load_yaml(path: str) -> dict[str, Any]:
 
 
 def _default_profile() -> dict[str, Any]:
-    if os.path.isfile(PROFILE_EXAMPLE):
-        return _load_yaml(PROFILE_EXAMPLE)
+    """An empty profile — deliberately not the example file.
+
+    This used to return config/profile.example.yml, which is documentation for
+    hand-editing and contains a worked example: Jane Smith, San Francisco,
+    +1 555 000 0000. A fresh install therefore opened onboarding pre-filled with
+    a stranger's details, and résumé extraction could never correct them because
+    it only fills fields that are empty — and none of them were.
+
+    That is what "it couldn't take my name and city from the résumé" was: the
+    values were taken, and then discarded as a conflict with data the user had
+    never entered.
+    """
     return {
         "candidate": {
             "name": "",
@@ -381,15 +391,26 @@ def update_target_titles_from_resume(
     extracted = extracted or {}
     payload = {**profile, "target_titles": titles}
 
-    # First-run: fill identity from the résumé so save_profile validation passes.
+    # Fill anything the profile has not got, whether or not it exists already.
+    #
+    # This used to run only on a profile that did not exist yet. Onboarding asks
+    # for the profile at step 1 and the résumé at step 2, so by upload time a
+    # profile always exists — and every field the user left blank expecting the
+    # résumé to supply it stayed blank. Name, city and phone were the ones people
+    # noticed.
+    #
+    # A value the user typed is never touched; only empty fields are filled.
+    for key in ("name", "email", "phone", "location", "linkedin", "github"):
+        if extracted.get(key) and not str(payload.get(key) or "").strip():
+            payload[key] = extracted[key]
+    if extracted.get("years_exp") and not payload.get("years_exp"):
+        payload["years_exp"] = extracted["years_exp"]
+    if extracted.get("preferred_locations") and not payload.get("preferred_locations"):
+        payload["preferred_locations"] = extracted["preferred_locations"]
+
+    # Placeholders exist so the first save passes validation before onboarding
+    # has collected a name. They must not appear on an established profile.
     if not profile.get("exists"):
-        for key in ("name", "email", "phone", "location", "linkedin", "github"):
-            if extracted.get(key) and not payload.get(key):
-                payload[key] = extracted[key]
-        if extracted.get("years_exp") and not payload.get("years_exp"):
-            payload["years_exp"] = extracted["years_exp"]
-        if extracted.get("preferred_locations") and not payload.get("preferred_locations"):
-            payload["preferred_locations"] = extracted["preferred_locations"]
         payload.setdefault("name", (extracted.get("name") or "Demo User").strip() or "Demo User")
         payload.setdefault("email", (extracted.get("email") or "demo@example.com").strip() or "demo@example.com")
         payload.setdefault("preferred_locations", ["Remote"])
