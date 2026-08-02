@@ -552,6 +552,45 @@ def create_app():
         return {"ok": True, "backend": backend,
                 "message": f"Working — {len(results)} results for a test query."}
 
+    @app.post("/setup/connections/test-llm")
+    def test_llm_connection(user: dict = Depends(_auth)):
+        """One tiny completion, so "Ready" means the key works.
+
+        is_available() only checks that a key is present. A key can be present
+        and be revoked, out of quota, for the wrong provider, or naming a model
+        the account cannot reach — all of which read as Ready until the first
+        evaluation quietly falls back to keyword scoring.
+        """
+        from llm import get_llm
+        from llm.status import llm_status
+
+        st = llm_status()
+        provider = get_llm()
+        if not provider:
+            return {"ok": False, "provider": st.get("provider"),
+                    "message": st.get("reason")
+                               or "No AI provider configured. Add a key above, "
+                                  "or set up Local AI."}
+        try:
+            reply = provider.complete(
+                'Reply with exactly: {"ok": true}', max_tokens=40
+            )
+        except Exception as e:
+            return {"ok": False, "provider": st.get("resolved_provider") or st.get("provider"),
+                    "model": getattr(provider, "model", ""), "message": str(e)[:400]}
+
+        if not (reply or "").strip():
+            return {"ok": False, "provider": st.get("resolved_provider"),
+                    "model": getattr(provider, "model", ""),
+                    "message": "The model returned nothing. On a small local "
+                               "model this usually means the reply was cut off "
+                               "before it started — try a larger one."}
+        return {"ok": True,
+                "provider": st.get("resolved_provider") or st.get("provider"),
+                "model": getattr(provider, "model", ""),
+                "message": f"Working — {getattr(provider, 'model', 'the model')} "
+                           f"answered in {len(reply.strip())} characters."}
+
     @app.post("/setup/playwright/install")
     def post_playwright_install(user: dict = Depends(_auth)):
         from connections_store import install_playwright_chromium

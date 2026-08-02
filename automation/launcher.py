@@ -268,7 +268,24 @@ def run(install: bool) -> int:
     _log("")
 
     _popen([sys.executable, "-m", "automation.cli", "api"], cwd=ROOT, env=api_env)
-    _popen(_npm_argv("run", "dev"), cwd=DASHBOARD, env=env)
+    if install:
+        # `start` is for using the app; `dev` is for working on it.
+        #
+        # next dev compiles each route the first time it is opened. That is a
+        # fair trade while editing, and the wrong one for a user clicking
+        # through menus — and it is far worse where the native SWC compiler is
+        # unavailable. On a Windows machine whose security policy blocked
+        # @next/swc-win32-x64-msvc, Next fell back to WASM and took 56s to
+        # become ready, with every first visit to a page slow after that.
+        #
+        # A production build pays that cost once, up front, and then serves
+        # pages immediately. Next caches between builds, so only the first is
+        # expensive.
+        _log("Building the dashboard (first time takes a few minutes)…")
+        subprocess.run(_npm_argv("run", "build"), cwd=DASHBOARD, env=env, check=True)
+        _popen(_npm_argv("run", "start"), cwd=DASHBOARD, env=env)
+    else:
+        _popen(_npm_argv("run", "dev"), cwd=DASHBOARD, env=env)
     # The API process already runs the scan + worker loop on a daemon thread.
     # Spawning `cli scheduler` here used to double every due tick.
 
