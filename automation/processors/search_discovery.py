@@ -143,12 +143,24 @@ def _explain_cse_error(resp) -> str:
         )
 
     if resp.status_code == 403 and "does not have the access" in detail.lower():
+        # Google returns this same sentence for two different causes, and the
+        # response body does not distinguish them. Enabling the API is the one
+        # people try first; when the dashboard then shows traffic but every
+        # call still 403s, it is the other one — the key is restricted, or it
+        # belongs to a different project than the one the API was enabled on.
         return (
-            "Google Custom Search is refusing this key: the Custom Search JSON "
-            "API is not enabled on the Cloud project the key belongs to. Open "
-            "console.cloud.google.com/apis/library/customsearch.googleapis.com, "
-            "check the project selector matches the project the key was created "
-            "in, and press Enable. It can take a minute to take effect."
+            "Google Custom Search is refusing this key. Two things cause this "
+            "exact error, so check both:\n"
+            "1. The Custom Search JSON API is not enabled on the project the "
+            "key belongs to — console.cloud.google.com/apis/library/"
+            "customsearch.googleapis.com, and make sure the project selector "
+            "matches the project the key was created in.\n"
+            "2. The key is restricted and Custom Search is not on its allowed "
+            "list — console.cloud.google.com/apis/credentials, click the key, "
+            "and under “API restrictions” either choose “Don't restrict key” "
+            "or add “Custom Search API”.\n"
+            "If the API dashboard shows requests arriving but all failing, it "
+            "is the second one."
         )
     if resp.status_code == 403:
         return (
