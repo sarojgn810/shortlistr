@@ -136,9 +136,19 @@ def test_scanning_many_urls_runs_them_together(monkeypatch):
     urls = [f"https://co{i}.test/careers" for i in range(8)]
     t0 = time.monotonic()
     out = fp.propose_from_urls(urls)
+    elapsed = time.monotonic() - t0
     assert len(out) == len(urls), "a URL was dropped"
+
+    # This is the real proof, and it does not depend on the clock: more than one
+    # scan was in flight at the same moment.
     assert tracker["peak"] > 1, "scanned one at a time"
-    assert time.monotonic() - t0 < 8 * 0.2 * 0.6
+
+    # The wall-clock check is only here to catch a regression to fully serial
+    # work, which would take 8 x 0.2 = 1.6s. It used to demand 0.96s — a 40%
+    # margin — and a shared Windows runner missed it by 8ms, failing CI on a
+    # README change. A test that fails on runner jitter teaches people to
+    # ignore CI, which costs more than the precision was worth.
+    assert elapsed < 8 * 0.2 * 0.8, f"looks serial: {elapsed:.2f}s"
 
 
 def test_proposal_order_matches_the_input(monkeypatch):

@@ -2,12 +2,16 @@
 
 <img src="docs/assets/logo.png" alt="Shortlistr" width="380">
 
-### Your job search, on your laptop.
+### The job hunt, minus the admin.
 
 **Shortlistr finds roles worth your time, judges them against your actual CV, and prepares the application — then stops and hands you the mouse.**
 
+[![Watch the 45-second demo](docs/assets/demo-poster.png)](https://github.com/sarojgn810/shortlistr/raw/main/docs/assets/shortlistr-demo.mp4)
+
+<sub><i>45 seconds, real scan, no mockups — click to play.</i></sub>
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-1b1b1b.svg?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-900%20passing-C6F24E.svg?style=flat-square&labelColor=1b1b1b)](tests)
+[![Tests](https://img.shields.io/badge/tests-1048%20passing-C6F24E.svg?style=flat-square&labelColor=1b1b1b)](tests)
 [![Python](https://img.shields.io/badge/python-3.10%2B-1b1b1b.svg?style=flat-square)](https://www.python.org/downloads/)
 [![Local first](https://img.shields.io/badge/data-stays%20on%20your%20machine-C6F24E.svg?style=flat-square&labelColor=1b1b1b)](#privacy)
 
