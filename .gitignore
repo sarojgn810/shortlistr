@@ -103,3 +103,6 @@ batch/anchor-*.csv
 # Layer 3 database — candidate PII, never committed
 data/platform.db
 data/*.pre-split-*
+
+# local working copy of the demo; the committed one is docs/assets/
+shortlister.mp4
