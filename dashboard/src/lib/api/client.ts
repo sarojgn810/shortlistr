@@ -714,6 +714,12 @@ export const api = {
     request<import("@/src/types/job").PrepBundle>(`/jobs/${jobId}/prep/generate`, {
       method: "POST",
     }),
+  // Generate only when missing. Approving uses this rather than generatePrep so
+  // re-approving never discards a cover letter the user has already edited.
+  ensurePrep: (jobId: string) =>
+    request<import("@/src/types/job").PrepBundle>(`/jobs/${jobId}/prep/ensure`, {
+      method: "POST",
+    }),
   savePrepCoverLetter: (jobId: string, body: string) =>
     request<{ saved: boolean; job_id: string }>(`/jobs/${jobId}/prep/cover-letter`, {
       method: "PATCH",
