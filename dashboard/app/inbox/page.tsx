@@ -199,7 +199,7 @@ export default function InboxPage() {
     // the user think the approval didn't happen.
     try {
       toast.message("Generating prep materials…");
-      await api.generatePrep(jobId);
+      await api.ensurePrep(jobId);
       toast.success("Approved — prep ready");
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : "prep generation failed";

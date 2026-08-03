@@ -12,7 +12,7 @@ from typing import Optional
 from store import db as store
 
 try:
-    from fastapi import Depends, FastAPI, File, HTTPException, Header, UploadFile
+    from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Header, UploadFile
     from fastapi.responses import FileResponse, HTMLResponse
     from pydantic import BaseModel
 except ImportError:
@@ -1446,10 +1446,33 @@ def create_app():
         except ValueError as e:
             raise HTTPException(404, str(e))
 
+    def _prep_after_approve(job_id: str) -> None:
+        """Best-effort prep for a freshly approved job.
+
+        The dashboard asks for prep itself right after approving, but approvals
+        also arrive from the chat agent, scripts and curl — and mark_approved is
+        only a status write, so those used to leave a role with no materials.
+        ensure_prep_bundle is idempotent and locked, so running from both ends
+        costs nothing when the client already did the work.
+
+        Runs after the response: generation calls an LLM, and approving must not
+        block on it.
+        """
+        try:
+            from api.prep_bundle import ensure_prep_bundle
+
+            ensure_prep_bundle(job_id)
+        except Exception as e:  # never surface into the approve call
+            import logging
+
+            logging.getLogger("shortlistr.api").warning(
+                "Background prep for %s failed: %s", job_id, e)
+
     @app.post("/jobs/{job_id}/pipeline-status")
     def set_pipeline_status(
         job_id: str,
         body: PipelineStatusBody,
+        background: BackgroundTasks,
         user: dict = Depends(_auth),
     ):
         from store.status import StatusError, mark_approved, mark_skipped, transition_pipeline, validate_job_id
@@ -1458,6 +1481,7 @@ def create_app():
             st = body.status.strip().lower()
             if st == "approved":
                 result = mark_approved(job_id, actor=user.get("sub", "api"))
+                background.add_task(_prep_after_approve, job_id)
             elif st in ("skipped", "skip"):
                 result = mark_skipped(job_id, actor=user.get("sub", "api"))
             elif st in ("pending", "evaluated"):
@@ -1495,6 +1519,24 @@ def create_app():
         try:
             validate_job_id(job_id)
             return get_prep_bundle(job_id, generate=False)
+        except StatusError as e:
+            raise HTTPException(400, str(e))
+        except ValueError as e:
+            raise HTTPException(404, str(e))
+
+    @app.post("/jobs/{job_id}/prep/ensure")
+    def job_prep_ensure(job_id: str, user: dict = Depends(_auth)):
+        """Generate prep only if it is missing. Used by the approve flow.
+
+        Distinct from /prep/generate, which always regenerates — that is what
+        the Regenerate button means, and approving should not throw away a
+        cover letter the user has already edited.
+        """
+        from api.prep_bundle import ensure_prep_bundle
+        from store.status import StatusError, validate_job_id
+        try:
+            validate_job_id(job_id)
+            return ensure_prep_bundle(job_id)
         except StatusError as e:
             raise HTTPException(400, str(e))
         except ValueError as e:
