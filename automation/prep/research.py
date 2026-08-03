@@ -18,9 +18,15 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+# Real write-ups introduce questions in ways the first version did not match:
+# "First round: How would you...", '2. What is your approach...', a bullet, or a
+# quote. Requiring a preceding . ! ? or newline found zero questions in pages
+# that plainly contained them.
 _QUESTION_RE = re.compile(
-    r"(?:^|[.!?]\s+|[\n•\-]\s*)((?:how|what|why|when|where|tell me|describe|walk me|"
-    r"explain|design|have you|can you|would you|do you)[^?]{12,180}\?)",
+    r"(?:^|[.!?:;]\s+|[\n\r•\-*\u2013\u2014\u201c\u201d\"']\s*|\d+[.)]\s+)"
+    r"((?:how|what|why|when|where|which|who|tell me|describe|walk me|walk us|"
+    r"explain|design|give me|share|have you|can you|could you|would you|do you|"
+    r"did you|if you)[^?]{12,180}\?)",
     re.I,
 )
 
@@ -154,7 +160,21 @@ def web_organic(query: str, *, num: int = 6) -> list[dict[str, str]]:
     if not q:
         return []
 
-    # 1) Free DuckDuckGo — skipped entirely while it is challenging us
+    # 1) A configured API first. DuckDuckGo now answers HTTP 202 (a bot
+    # challenge) for these queries, so trying it first only added latency
+    # before falling through to the backend that actually works.
+    try:
+        from processors.search_discovery import run_search_query, search_backend_available
+
+        backend = search_backend_available()
+        if backend in ("google_cse", "serpapi"):
+            hits = _normalize_hits(run_search_query(q, backend=backend, num=num), q)
+            if hits:
+                return hits
+    except Exception as exc:
+        logger.debug("CSE/SerpAPI interview search failed: %s", exc)
+
+    # 2) Free DuckDuckGo — skipped entirely while it is challenging us
     if not _ddg_blocked():
         try:
             hits = _duckduckgo_organic(q, num=num)
@@ -163,19 +183,6 @@ def web_organic(query: str, *, num: int = 6) -> list[dict[str, str]]:
         except Exception as exc:
             _mark_ddg_blocked()
             logger.debug("DDG interview search failed, backing off: %s", exc)
-
-    # 2) Shared discovery backends (CSE / SerpAPI) when configured
-    try:
-        from processors.search_discovery import run_search_query, search_backend_available
-
-        backend = search_backend_available()
-        if backend in ("google_cse", "serpapi"):
-            raw = run_search_query(q, backend=backend, num=num)
-            hits = _normalize_hits(raw, q)
-            if hits:
-                return hits
-    except Exception as exc:
-        logger.debug("CSE/SerpAPI interview search failed: %s", exc)
 
     # 3) Optional Serper (paid) — only if already configured
     try:
@@ -241,6 +248,119 @@ def _process_bullets(results: list[dict[str, str]], *, limit: int = 6) -> list[s
     return bullets
 
 
+
+# ── reading the pages, not just the snippets ─────────────────────────────────
+#
+# A search snippet is ~160 characters and almost never contains a whole
+# question, so extracting from snippets alone yielded nothing usable. The
+# questions people were actually asked live in the body of Reddit threads,
+# blog write-ups and GitHub prep repos, so those pages have to be read.
+#
+# Glassdoor and Blind are the obvious sources and are deliberately not fetched:
+# both disallow it in robots.txt and put the content behind a login. An MIT
+# licence is not permission to break a site's terms, so those results are
+# dropped rather than worked around.
+
+_ROBOTS_CACHE: dict[str, Any] = {}
+_FETCH_TIMEOUT = 8
+_MAX_PAGES = 4
+
+# Hosts that never carry candidate-reported questions, or that forbid fetching.
+_SKIP_HOSTS = (
+    "glassdoor.", "teamblind.", "linkedin.com", "indeed.", "facebook.",
+    "twitter.", "x.com", "youtube.", "instagram.",
+)
+
+
+def _robots_allows(url: str) -> bool:
+    """Honour robots.txt. Unreachable robots.txt means do not fetch."""
+    import urllib.robotparser as robotparser
+
+    try:
+        parts = urlparse(url)
+        origin = f"{parts.scheme}://{parts.netloc}"
+    except Exception:
+        return False
+
+    if origin not in _ROBOTS_CACHE:
+        parser = robotparser.RobotFileParser()
+        parser.set_url(origin + "/robots.txt")
+        try:
+            parser.read()
+        except Exception:
+            # No robots.txt we can read — treat as disallowed rather than
+            # assuming permission.
+            _ROBOTS_CACHE[origin] = None
+        else:
+            _ROBOTS_CACHE[origin] = parser
+
+    parser = _ROBOTS_CACHE.get(origin)
+    if parser is None:
+        return False
+    try:
+        return bool(parser.can_fetch(_HEADERS["User-Agent"], url))
+    except Exception:
+        return False
+
+
+def _page_text(url: str) -> str:
+    """Fetch a result page and return its visible text, or ''."""
+    try:
+        resp = requests.get(url, headers=_HEADERS, timeout=_FETCH_TIMEOUT)
+        if resp.status_code != 200:
+            return ""
+        ctype = (resp.headers.get("content-type") or "").lower()
+        if "html" not in ctype and "text" not in ctype:
+            return ""
+        body = resp.text[:400_000]
+    except Exception as exc:
+        logger.debug("prep research fetch failed for %s: %s", url, exc)
+        return ""
+
+    body = re.sub(r"<script[^>]*>.*?</script>", " ", body, flags=re.I | re.S)
+    body = re.sub(r"<style[^>]*>.*?</style>", " ", body, flags=re.I | re.S)
+    body = re.sub(r"<[^>]+>", " ", body)
+    return re.sub(r"\s+", " ", unescape(body)).strip()
+
+
+def questions_from_pages(hits: list[dict[str, str]], *, limit: int = 12) -> tuple[list[str], list[str]]:
+    """Read the top allowed result pages and pull real questions out of them.
+
+    Returns ``(questions, sources)`` — sources are the hosts the questions came
+    from, so the guide can say where each set was found instead of implying the
+    company published them.
+    """
+    found: list[str] = []
+    sources: list[str] = []
+    fetched = 0
+
+    for hit in hits:
+        if fetched >= _MAX_PAGES or len(found) >= limit:
+            break
+        url = (hit.get("link") or "").strip()
+        if not url.startswith("http"):
+            continue
+        host = urlparse(url).netloc.lower()
+        if any(bad in host for bad in _SKIP_HOSTS):
+            continue
+        if not _robots_allows(url):
+            logger.debug("prep research: robots.txt disallows %s", url)
+            continue
+
+        text = _page_text(url)
+        fetched += 1
+        time.sleep(0.6)          # be a polite client
+        if not text:
+            continue
+        qs = _extract_questions(text, limit=limit)
+        new = [q for q in qs if q.lower() not in {f.lower() for f in found}]
+        if new:
+            found.extend(new)
+            sources.append(host)
+
+    return found[:limit], sources
+
+
 def research_interview(
     company: str,
     role: str,
@@ -293,12 +413,22 @@ def research_interview(
         ],
         limit=6,
     )
+    # Real questions come from the body of the result pages. Snippets are ~160
+    # characters and almost never contain a whole question, which is why
+    # snippet-only extraction returned nothing usable.
+    page_questions, page_sources = questions_from_pages(all_hits, limit=14)
+
     question_blob = "\n".join(
         f"{h.get('title', '')}. {h.get('snippet', '')}" for h in all_hits
     )
     if jd:
         question_blob += "\n" + jd[:2500]
-    questions = _extract_questions(question_blob, limit=14)
+    snippet_questions = _extract_questions(question_blob, limit=14)
+
+    questions = list(page_questions)
+    for q in snippet_questions:
+        if q.lower() not in {x.lower() for x in questions}:
+            questions.append(q)
 
     role_bits = [w.lower() for w in re.findall(r"[A-Za-z]{4,}", short_role)][:4]
     ranked: list[str] = []
@@ -319,18 +449,40 @@ def research_interview(
     mode = "researched" if (process or questions or sources) else "fallback"
     if mode == "fallback":
         notes.append(
-            f"Web search found little on {company} interviews (DuckDuckGo may be "
-            "rate-limited). Using a short labeled practice set — try again later, "
-            "or set free Google CSE keys for more reliable results."
+            f"No public interview reports found for {company}. The questions "
+            "below were written from this job description, not from what "
+            "candidates reported being asked."
+        )
+    elif page_sources:
+        notes.append(
+            f"Questions read via web search from "
+            f"{', '.join(sorted(set(page_sources))[:4])} for {company} · {role}. "
+            "Reported by candidates, not published by the company — verify; "
+            "processes change."
+        )
+    elif questions:
+        notes.append(
+            f"Questions taken from web search result summaries for {company} · "
+            f"{role}. Reported by candidates, not published by the company — "
+            "verify; processes change."
         )
     else:
         notes.append(
-            f"Researched public web results for {company} · {role} "
-            "(free search). Verify details; processes change."
+            f"Web search found interview process notes for {company} but no "
+            "reported questions. The questions below were written from this "
+            "job description."
         )
+
+    if page_questions:
+        question_origin = "pages"
+    elif questions:
+        question_origin = "snippets"
+    else:
+        question_origin = "none"
 
     return {
         "mode": mode,
+        "question_origin": question_origin,
         "company": company,
         "role": role,
         "process": process,
