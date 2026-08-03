@@ -285,6 +285,8 @@ export default function ConnectionsPage() {
   const [llmTest, setLlmTest] = useState<{ ok: boolean; message: string } | null>(null);
   const [testingLlm, setTestingLlm] = useState(false);
   const [googleCseCx, setGoogleCseCx] = useState("");
+  const [redditId, setRedditId] = useState("");
+  const [redditSecret, setRedditSecret] = useState("");
 
   // "Saved" is not "working": a key can be an OAuth client ID, belong to a
   // project without the API enabled, or be restricted to other APIs. One real
@@ -936,6 +938,90 @@ export default function ConnectionsPage() {
                       saveConn("google-cse-clear", {
                         google_cse_api_key: "",
                         google_cse_cx: "",
+                      })
+                    }
+                  >
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </div>
+          </ConnectorRow>
+          <ConnectorRow
+            name="Reddit — questions people were actually asked"
+            note="Free, no card. Reddit is where candidates write down what they were asked, and its robots.txt forbids scraping it — the official API is the only permitted route. Without this, prep questions are written from the job description instead of from real interview reports."
+            kind={conn?.reddit?.ready ? "active" : "optional"}
+            label={conn?.reddit?.ready ? "Ready" : "Recommended · free"}
+          >
+            <div className="space-y-3">
+              <ol className="list-decimal space-y-1 pl-5 text-sm text-stone">
+                <li>
+                  Open{" "}
+                  <a
+                    href="https://www.reddit.com/prefs/apps"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline"
+                  >
+                    reddit.com/prefs/apps
+                  </a>{" "}
+                  and press &ldquo;create another app&hellip;&rdquo; at the bottom.
+                </li>
+                <li>
+                  Choose type <strong>script</strong>. Any name works; redirect URI can be
+                  <code className="mx-1">http://localhost:8787</code>.
+                </li>
+                <li>
+                  The <strong>client ID</strong> is the short string just under the app
+                  name. The <strong>secret</strong> is labelled &ldquo;secret&rdquo;.
+                </li>
+              </ol>
+              <Field label="Client ID">
+                <input
+                  type="text"
+                  value={redditId}
+                  onChange={(e) => setRedditId(e.target.value)}
+                  placeholder={
+                    conn?.reddit?.client_id_set ? "•••••••• (leave blank to keep)" : "Xy1AbCdEfGhIjK"
+                  }
+                  className={inputCls}
+                  autoComplete="off"
+                />
+              </Field>
+              <Field label="Client secret">
+                <input
+                  type="password"
+                  value={redditSecret}
+                  onChange={(e) => setRedditSecret(e.target.value)}
+                  placeholder={
+                    conn?.reddit?.client_secret_set ? "•••••••• (leave blank to keep)" : "••••••••"
+                  }
+                  className={inputCls}
+                  autoComplete="off"
+                />
+              </Field>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="lime"
+                  size="sm"
+                  isLoading={savingKey === "reddit"}
+                  onClick={() =>
+                    saveConn("reddit", {
+                      ...(redditId ? { reddit_client_id: redditId } : {}),
+                      ...(redditSecret ? { reddit_client_secret: redditSecret } : {}),
+                    })
+                  }
+                >
+                  <Save size={13} /> Save
+                </Button>
+                {(conn?.reddit?.client_id_set || conn?.reddit?.client_secret_set) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      saveConn("reddit-clear", {
+                        reddit_client_id: "",
+                        reddit_client_secret: "",
                       })
                     }
                   >
