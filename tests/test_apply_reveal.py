@@ -62,6 +62,33 @@ SUBMITTED_PAGE = "<html><body><h1>APPLICATION WAS SUBMITTED</h1></body></html>"
 
 
 @pytest.fixture
+def candidate(monkeypatch):
+    """Fixed profile data for the fill.
+
+    These tests used to read whatever `config/profile.yml` happened to hold.
+    That file is gitignored — it is the user's own data — so on a developer
+    machine the fields were populated and the tests passed, while CI had no
+    profile at all, filled nothing, and failed on every run. The suite was
+    green locally and red on GitHub for five commits because of it.
+
+    A test that asserts on filling must supply what gets filled.
+    """
+    from apply import ats_fill
+
+    monkeypatch.setattr(ats_fill, "_profile_fields", lambda: {
+        "first_name": "Alex",
+        "last_name": "Taylor",
+        "full_name": "Alex Taylor",
+        "preferred_name": "Alex",
+        "email": "alex.taylor@example.com",
+        "phone": "+10000000000",
+        "linkedin": "https://www.linkedin.com/in/alex-taylor",
+        "github": "https://github.com/alextaylor",
+    })
+    return ats_fill
+
+
+@pytest.fixture
 def site(tmp_path):
     (tmp_path / "job.html").write_text(DESCRIPTION_PAGE)
     (tmp_path / "form.html").write_text(FORM_PAGE)
@@ -90,7 +117,7 @@ def test_unrelated_buttons_are_not_navigation():
 
 # ── the behaviour ────────────────────────────────────────────────────────────
 
-def test_a_description_page_reaches_the_form(site):
+def test_a_description_page_reaches_the_form(site, candidate):
     """The reported bug: the link opened the page with the Apply button."""
     _skip_without_browser()
     from apply.ats_fill import fill_application_form
@@ -101,7 +128,7 @@ def test_a_description_page_reaches_the_form(site):
     assert report["ready_for_user_review"] is True
 
 
-def test_landing_on_the_form_does_not_navigate_away(site):
+def test_landing_on_the_form_does_not_navigate_away(site, candidate):
     _skip_without_browser()
     from apply.ats_fill import fill_application_form
 
@@ -110,7 +137,7 @@ def test_landing_on_the_form_does_not_navigate_away(site):
     assert "first_name" in report["filled"]
 
 
-def test_a_submit_button_reading_apply_now_is_never_clicked(site):
+def test_a_submit_button_reading_apply_now_is_never_clicked(site, candidate):
     """The safety property. If this regresses, the tool submits applications."""
     _skip_without_browser()
     from apply.ats_fill import fill_application_form
