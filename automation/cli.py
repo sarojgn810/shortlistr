@@ -28,6 +28,7 @@ def main(argv: list[str] | None = None) -> int:
             "          pdf, sync-check, liveness, scan, resolve-url, status, tracker,\n"
             "          migrate-markdown, export-pipeline, export-applications, bundle, worker, seed, reset,\n"
             "          uninstall, api, start, dev, scheduler, evaluate, explain, diff, inbox, resolve-jobs,\n"
+            "          prep-backfill,\n"
             "          apply-assist, email-routing, ingest, jobs-sweep, test\n"
         )
         return 0
@@ -193,6 +194,44 @@ def main(argv: list[str] | None = None) -> int:
             print(str(e), file=sys.stderr)
             return 1
         return 0
+    if cmd == "prep-backfill":
+        # Approved roles used to be left without materials whenever the browser
+        # tab that approved them failed the follow-up call. This repairs them.
+        from api.prep_bundle import ensure_prep_bundle, prep_exists
+        from store import db as store
+
+        dry = any(a in ("--dry-run", "-n") for a in rest)
+        store.init_db()
+        with store.db() as conn:
+            rows = conn.execute(
+                """
+                SELECT j.id, j.company, j.title
+                FROM pipeline p JOIN jobs j ON j.id = p.job_id
+                WHERE p.status IN ('approved', 'submitted')
+                ORDER BY p.added_at DESC
+                """
+            ).fetchall()
+
+        missing = [dict(r) for r in rows if not prep_exists(dict(r)["id"])]
+        print(f"{len(rows)} approved/submitted role(s), {len(missing)} without prep")
+        if not missing:
+            return 0
+        if dry:
+            for m in missing:
+                print(f"  would generate: {m['company']} — {m['title']}")
+            return 0
+
+        failed = 0
+        for m in missing:
+            label = f"{m['company']} — {m['title']}"
+            try:
+                ensure_prep_bundle(m["id"])
+                print(f"  ok   {label}")
+            except Exception as e:
+                failed += 1
+                print(f"  FAIL {label}: {e}", file=sys.stderr)
+        print(f"\n{len(missing) - failed} generated, {failed} failed")
+        return 1 if failed else 0
     if cmd == "migrate-markdown":
         from store.migrate import main as run
         return run()

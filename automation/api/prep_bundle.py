@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
+import tempfile
 from typing import Any
 
+from config import PREP_DIR
 from prep.diff import compute_diff
 from prep.ownership import display_fit, load_owned_prep, owner_key, parse_front_matter
 from store import db as store
@@ -175,6 +178,55 @@ def get_prep_bundle(job_id: str, *, generate: bool = False) -> dict[str, Any]:
 
 def generate_prep_bundle(job_id: str) -> dict[str, Any]:
     return get_prep_bundle(job_id, generate=True)
+
+
+def prep_exists(job_id: str) -> bool:
+    """True when this profile already owns a prep guide for the job."""
+    jid = validate_job_id(job_id)
+    store.init_db()
+    with store.db() as conn:
+        row = conn.execute("SELECT url FROM jobs WHERE id = ?", (jid,)).fetchone()
+    url = (dict(row).get("url") or "") if row else ""
+    path, _ = load_owned_prep(jid, url=url)
+    return bool(path and os.path.isfile(path))
+
+
+def ensure_prep_bundle(job_id: str) -> dict[str, Any]:
+    """Generate prep only when it is missing, and never twice at once.
+
+    Approval now triggers prep from two directions — the dashboard calls this
+    straight after approving, and the API schedules it in the background so an
+    approval from any other client still gets materials. Both would otherwise
+    run the generator against the same job at the same moment, paying for two
+    LLM calls and racing on one output file.
+
+    The lock is advisory and degrades to a no-op where the platform offers no
+    locking primitive (see store/filelock), which is the right trade: a rare
+    duplicate generation is much cheaper than refusing to prepare anything.
+    """
+    jid = validate_job_id(job_id)
+    if prep_exists(jid):
+        return get_prep_bundle(jid, generate=False)
+
+    from store import filelock
+
+    # The lock lives in the system temp dir, not in interview-prep/. That
+    # directory is the user's own material — leaving .lock files scattered
+    # through it would be litter in content they read, sync and back up. Locks
+    # are per-machine and worthless across reboots anyway.
+    os.makedirs(PREP_DIR, exist_ok=True)
+    scope = hashlib.sha1(PREP_DIR.encode("utf-8")).hexdigest()[:8]
+    lock_path = os.path.join(tempfile.gettempdir(), f"shortlistr-prep-{scope}-{jid}.lock")
+    with open(lock_path, "a+") as fh:
+        filelock.acquire(fh)
+        try:
+            # Re-check under the lock: the other caller may have finished
+            # between our first check and acquiring it.
+            if prep_exists(jid):
+                return get_prep_bundle(jid, generate=False)
+            return get_prep_bundle(jid, generate=True)
+        finally:
+            filelock.release(fh)
 
 
 def list_prep_summaries(*, limit: int = 100) -> list[dict[str, Any]]:

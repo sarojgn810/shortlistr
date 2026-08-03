@@ -134,19 +134,32 @@ export default function PipelinePage() {
 
   const handleApprove = async () => {
     if (!selected || approving) return;
+    const jobId = selected.id;
     setApproving(true);
     try {
-      await api.setPipelineStatus(selected.id, "approved");
+      await api.setPipelineStatus(jobId, "approved");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Could not approve");
+      setApproving(false);
+      return;
+    }
+    // The approval has landed. Prep is a separate, best-effort step: reporting
+    // "Could not approve" because prep failed used to leave the drawer open on
+    // a job that was in fact approved, so it looked like nothing happened and
+    // the role was left with no materials. The API also schedules prep in the
+    // background, so a failure here is recoverable either way.
+    try {
       toast.message("Generating prep materials…");
-      await api.generatePrep(selected.id);
+      await api.ensurePrep(jobId);
       toast.success("Approved — prep ready");
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : "prep generation failed";
+      toast.warning(`Approved, but ${msg}. You can retry prep on the job page.`);
+    } finally {
+      setApproving(false);
       refetch(true);
       void refreshPendingCount();
       closeDrawer();
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "Could not approve");
-    } finally {
-      setApproving(false);
     }
   };
 
