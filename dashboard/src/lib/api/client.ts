@@ -147,6 +147,7 @@ export interface ConnectionsSetup {
   email_verify?: { api_key_set: boolean; provider: string };
   serper?: { api_key_set: boolean };
   google_cse?: { api_key_set: boolean; cx_set: boolean; ready: boolean };
+  reddit?: { client_id_set: boolean; client_secret_set: boolean; ready: boolean };
   page_reader?: {
     enabled: boolean;
     ready: boolean;
@@ -173,6 +174,8 @@ export interface ConnectionsUpdate {
   serper_api_key?: string;
   google_cse_api_key?: string;
   google_cse_cx?: string;
+  reddit_client_id?: string;
+  reddit_client_secret?: string;
   github_token?: string;
   mcp_servers?: McpServerConfig[];
 }
