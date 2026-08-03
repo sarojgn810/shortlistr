@@ -361,6 +361,117 @@ def questions_from_pages(hits: list[dict[str, str]], *, limit: int = 12) -> tupl
     return found[:limit], sources
 
 
+
+# ── Reddit, via the official API ─────────────────────────────────────────────
+#
+# Reddit is where candidates actually write down what they were asked, and its
+# robots.txt disallows crawling it — so the scraper path above skips it. The
+# official API is free, permitted, and returns the same threads as structured
+# JSON. It needs a Reddit app (client id + secret); without one this is a no-op
+# and the rest of the research still runs.
+
+_REDDIT_TOKEN: dict[str, Any] = {"value": "", "expires": 0.0}
+_REDDIT_SUBS = "ExperiencedDevs+cscareerquestions+sre+devops+kubernetes+ITCareerQuestions"
+
+
+def _reddit_creds() -> tuple[str, str]:
+    try:
+        from secrets_store import get_secret, has_secret
+
+        if has_secret("REDDIT_CLIENT_ID") and has_secret("REDDIT_CLIENT_SECRET"):
+            return (get_secret("REDDIT_CLIENT_ID") or "",
+                    get_secret("REDDIT_CLIENT_SECRET") or "")
+    except Exception:
+        pass
+    import os
+
+    return (os.environ.get("REDDIT_CLIENT_ID", ""),
+            os.environ.get("REDDIT_CLIENT_SECRET", ""))
+
+
+def reddit_configured() -> bool:
+    cid, secret = _reddit_creds()
+    return bool(cid and secret)
+
+
+def _reddit_token() -> str:
+    """App-only OAuth token, cached until shortly before it expires."""
+    if _REDDIT_TOKEN["value"] and time.time() < _REDDIT_TOKEN["expires"]:
+        return str(_REDDIT_TOKEN["value"])
+
+    cid, secret = _reddit_creds()
+    if not (cid and secret):
+        return ""
+    try:
+        resp = requests.post(
+            "https://www.reddit.com/api/v1/access_token",
+            auth=(cid, secret),
+            data={"grant_type": "client_credentials"},
+            headers=_HEADERS,
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            logger.debug("Reddit auth failed: HTTP %s", resp.status_code)
+            return ""
+        payload = resp.json()
+    except Exception as exc:
+        logger.debug("Reddit auth error: %s", exc)
+        return ""
+
+    token = str(payload.get("access_token") or "")
+    _REDDIT_TOKEN["value"] = token
+    _REDDIT_TOKEN["expires"] = time.time() + float(payload.get("expires_in") or 3600) - 60
+    return token
+
+
+def reddit_interview_questions(
+    company: str, role: str, *, limit: int = 12
+) -> tuple[list[str], int]:
+    """Search Reddit for interview write-ups. Returns (questions, posts_read)."""
+    token = _reddit_token()
+    if not token:
+        return [], 0
+
+    short_role = re.split(r"[|/–—-]", role or "")[0].strip()
+    query = f'{company} interview {short_role}'.strip()
+    headers = dict(_HEADERS)
+    headers["Authorization"] = f"bearer {token}"
+
+    try:
+        resp = requests.get(
+            f"https://oauth.reddit.com/r/{_REDDIT_SUBS}/search",
+            params={"q": query, "restrict_sr": "true", "sort": "relevance",
+                    "t": "year", "limit": 12},
+            headers=headers,
+            timeout=12,
+        )
+        if resp.status_code != 200:
+            logger.debug("Reddit search failed: HTTP %s", resp.status_code)
+            return [], 0
+        children = resp.json().get("data", {}).get("children", [])
+    except Exception as exc:
+        logger.debug("Reddit search error: %s", exc)
+        return [], 0
+
+    found: list[str] = []
+    read = 0
+    needle = (company or "").lower()
+    for child in children:
+        post = child.get("data") or {}
+        blob = f"{post.get('title', '')}. {post.get('selftext', '')}"
+        # Only trust a post that actually names the company.
+        if needle and needle not in blob.lower():
+            continue
+        read += 1
+        for q in _extract_questions(blob, limit=limit):
+            if q.lower() not in {f.lower() for f in found}:
+                found.append(q)
+        if len(found) >= limit:
+            break
+
+    return found[:limit], read
+
+
 def research_interview(
     company: str,
     role: str,
@@ -383,7 +494,10 @@ def research_interview(
     queries = [
         f'"{company}" interview process OR hiring process OR "interview rounds"',
         f'"{company}" "{short_role}" interview questions',
-        f'"{company}" interview questions Glassdoor OR Blind',
+        # Not "Glassdoor OR Blind": both disallow fetching, so that query spent
+        # a request on results we then refuse to read. Aim it at write-ups we
+        # are actually allowed to open.
+        f'"{company}" "{short_role}" interview experience blog OR github',
     ]
 
     all_hits: list[dict[str, str]] = []
@@ -417,6 +531,22 @@ def research_interview(
     # characters and almost never contain a whole question, which is why
     # snippet-only extraction returned nothing usable.
     page_questions, page_sources = questions_from_pages(all_hits, limit=14)
+
+    # Reddit's robots.txt disallows crawling, so it never appears above. The
+    # official API is permitted and is where the questions actually are.
+    reddit_questions, reddit_posts = reddit_interview_questions(company, role, limit=14)
+    if reddit_questions:
+        page_sources.insert(0, "reddit.com (API)")
+        merged = list(reddit_questions)
+        for q in page_questions:
+            if q.lower() not in {x.lower() for x in merged}:
+                merged.append(q)
+        page_questions = merged
+    if reddit_posts and not reddit_questions:
+        notes.append(
+            f"Read {reddit_posts} Reddit thread(s) naming {company}; none listed "
+            "specific questions."
+        )
 
     question_blob = "\n".join(
         f"{h.get('title', '')}. {h.get('snippet', '')}" for h in all_hits

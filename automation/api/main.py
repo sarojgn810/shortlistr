@@ -132,6 +132,8 @@ class ConnectionsBody(BaseModel):
     serper_api_key: Optional[str] = None
     google_cse_api_key: Optional[str] = None
     google_cse_cx: Optional[str] = None
+    reddit_client_id: Optional[str] = None
+    reddit_client_secret: Optional[str] = None
     github_token: Optional[str] = None
     mcp_servers: Optional[list[McpServerBody]] = None
 

@@ -35,6 +35,8 @@ _SECRET_ALIASES: dict[str, tuple[str, ...]] = {
     "SHORTLISTR_GITHUB_TOKEN": ("SHORTLISTR_GITHUB_TOKEN", "GITHUB_TOKEN"),
     "GOOGLE_CSE_API_KEY": ("GOOGLE_CSE_API_KEY",),
     "GOOGLE_CSE_CX": ("GOOGLE_CSE_CX",),
+    "REDDIT_CLIENT_ID": ("REDDIT_CLIENT_ID",),
+    "REDDIT_CLIENT_SECRET": ("REDDIT_CLIENT_SECRET",),
     # Adzuna: free app id + key, and the only public feed with a real India
     # index — which is what makes it worth configuring for an India profile.
     "ADZUNA_APP_ID": ("ADZUNA_APP_ID",),
@@ -270,6 +272,11 @@ def get_connections_for_ui() -> dict[str, Any]:
             "cx_set": _secret_set("GOOGLE_CSE_CX"),
             "ready": _secret_set("GOOGLE_CSE_API_KEY") and _secret_set("GOOGLE_CSE_CX"),
         },
+        "reddit": {
+            "client_id_set": _secret_set("REDDIT_CLIENT_ID"),
+            "client_secret_set": _secret_set("REDDIT_CLIENT_SECRET"),
+            "ready": _secret_set("REDDIT_CLIENT_ID") and _secret_set("REDDIT_CLIENT_SECRET"),
+        },
         "page_reader": _page_reader_status(data),
         "github": {
             "token_set": _secret_set("SHORTLISTR_GITHUB_TOKEN"),
@@ -362,6 +369,10 @@ def save_connections_from_ui(body: dict[str, Any]) -> dict[str, Any]:
     if "google_cse_api_key" in body:
         _reject_non_api_key(body.get("google_cse_api_key"))
         _write_secret("GOOGLE_CSE_API_KEY", body.get("google_cse_api_key"))
+    if "reddit_client_id" in body:
+        _write_secret("REDDIT_CLIENT_ID", body.get("reddit_client_id"))
+    if "reddit_client_secret" in body:
+        _write_secret("REDDIT_CLIENT_SECRET", body.get("reddit_client_secret"))
     if "google_cse_cx" in body:
         _write_secret("GOOGLE_CSE_CX", body.get("google_cse_cx"))
     if "github_token" in body:

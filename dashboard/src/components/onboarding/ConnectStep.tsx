@@ -73,6 +73,26 @@ const CONNECTORS: Connector[] = [
     done: (c) => Boolean(c?.google_cse?.ready),
   },
   {
+    id: "reddit",
+    title: "Reddit — the questions people were actually asked",
+    unlocks:
+      "Interview questions candidates reported being asked at that company, pulled from write-ups on r/ExperiencedDevs, r/sre and similar. Without it, prep questions are written from the job description instead.",
+    cost: "Free, no card. Reddit's official API — the site's robots.txt forbids scraping it, so this is the only permitted route.",
+    href: "https://www.reddit.com/prefs/apps",
+    hrefLabel: "Create a Reddit app",
+    steps: [
+      "Scroll to the bottom and press “create another app…”.",
+      "Pick type “script”. Name it anything; redirect URI can be http://localhost:8787.",
+      "The client ID is the short string under the app name; the secret is labelled “secret”.",
+    ],
+    fields: [
+      { key: "reddit_client_id", label: "Client ID", placeholder: "Xy1AbCdEfGhIjK" },
+      { key: "reddit_client_secret", label: "Client secret", placeholder: "••••••••" },
+    ],
+    recommended: true,
+    done: (c) => Boolean(c?.reddit?.ready),
+  },
+  {
     id: "gmail",
     title: "Gmail — job alerts and sending",
     unlocks:
