@@ -108,7 +108,10 @@ def _llm_practice_questions(
         category = str(item.get("category") or "TECHNICAL").strip().upper()
         if category not in ("SYSTEM DESIGN", "TECHNICAL", "BEHAVIOURAL", "COMPANY FIT"):
             category = "TECHNICAL"
-        label = category if category == "COMPANY FIT" else f"PRACTICE \u00b7 {category}"
+        # These are written from this posting's own text, so "PRACTICE" was
+        # misleading — it reads as a generic bank at a glance, which is exactly
+        # what a candidate needs to be able to tell apart.
+        label = category if category == "COMPANY FIT" else f"FROM THIS POSTING \u00b7 {category}"
         out.append((label, question, str(item.get("hint") or "").strip()))
     return out
 
@@ -461,11 +464,19 @@ def _build_prep_doc(job: dict, cv_md: str) -> str:
         lines += [f"**Why this fit:** {fit_reason}", ""]
 
     # Research provenance
-    mode_label = (
-        "Web-researched for this company + role"
-        if use_research
-        else "Generic practice set (no company-specific intel yet)"
-    )
+    # Say where the questions came from. A padded bank was accurate but it is
+    # not what a prep guide is for — a candidate needs to know whether these
+    # were reported by real interviewees, inferred from the posting, or
+    # neither.
+    origin = research.get("question_origin")
+    if origin == "pages":
+        mode_label = "Read from candidate reports on the public web, for this company + role"
+    elif origin == "snippets":
+        mode_label = "From web search result summaries for this company + role"
+    elif researched_qs:
+        mode_label = "Written from this job description (no public interview reports found)"
+    else:
+        mode_label = "No questions available — configure a search key, see below"
     lines += [
         f"**Guide source:** {mode_label}",
         "",
@@ -568,13 +579,24 @@ def _build_prep_doc(job: dict, cv_md: str) -> str:
                 "",
             ]
         else:
+            # No generic practice bank. A guide padded with questions nobody was
+            # asked reads as company intel at a glance and is worse than saying
+            # plainly that there is nothing yet.
             lines += [
-                f"_No company-specific questions found. Short **{role_type}** practice "
-                f"set below — add an AI key in Connections for questions written "
-                "against this posting, or a Google CSE key for company intel._",
+                f"_No interview reports were found for **{company}**, and no AI key "
+                "is configured to write questions from this posting._",
+                "",
+                "**To get real questions here:**",
+                "",
+                "1. Add a free Google Custom Search key in **Connections** — this is "
+                "what finds what candidates reported being asked.",
+                "2. Add an AI key in **Connections** — this writes questions from "
+                "this specific job description as a second source.",
+                "",
+                "Then press **Regenerate** on this page.",
                 "",
             ]
-            questions = _fallback_practice_questions(role_type, company)
+            questions = []
         current_cat = None
         for cat, question, hint in questions:
             if cat != current_cat:

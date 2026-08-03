@@ -52,7 +52,7 @@ def test_questions_come_back_with_category_and_hint(monkeypatch):
          "hint": "keys, rebalancing"})))
 
     out = _llm_practice_questions("Acme", "SRE", JD, "sre")
-    assert out == [("PRACTICE · TECHNICAL", "How would you shard this?", "keys, rebalancing")]
+    assert out == [("FROM THIS POSTING · TECHNICAL", "How would you shard this?", "keys, rebalancing")]
 
 
 def test_company_fit_is_not_prefixed_as_practice(monkeypatch):
@@ -80,7 +80,7 @@ def test_an_unknown_category_becomes_technical(monkeypatch):
     monkeypatch.setattr("llm.get_llm", lambda *a, **k: _provider(_reply(
         {"category": "WHATEVER", "question": "q", "hint": "h"})))
 
-    assert _llm_practice_questions("Acme", "SRE", JD, "sre")[0][0] == "PRACTICE · TECHNICAL"
+    assert _llm_practice_questions("Acme", "SRE", JD, "sre")[0][0] == "FROM THIS POSTING · TECHNICAL"
 
 
 def test_a_missing_category_becomes_technical(monkeypatch):
@@ -88,7 +88,7 @@ def test_a_missing_category_becomes_technical(monkeypatch):
         _reply({"question": "q"})))
 
     cat, question, hint = _llm_practice_questions("Acme", "SRE", JD, "sre")[0]
-    assert cat == "PRACTICE · TECHNICAL" and question == "q" and hint == ""
+    assert cat == "FROM THIS POSTING · TECHNICAL" and question == "q" and hint == ""
 
 
 def test_the_list_is_capped(monkeypatch):

@@ -49,7 +49,13 @@ def test_research_with_free_web_search(monkeypatch):
     assert out["mode"] == "researched"
     assert out["sources"]
     assert out["process"] or out["questions"]
-    assert "free search" in " ".join(out["notes"]).lower()
+    # The note has to say where the questions came from. It used to say "free
+    # search"; it now distinguishes questions read from the result pages
+    # themselves from ones taken out of the search summaries, because those are
+    # different levels of evidence.
+    note = " ".join(out["notes"]).lower()
+    assert "web search" in note
+    assert out["question_origin"] in ("pages", "snippets")
 
 
 def test_build_prep_differs_by_company(monkeypatch):
