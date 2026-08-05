@@ -80,12 +80,17 @@ def test_non_india_location_leaves_region_unset():
 
 
 def test_extracts_recent_title():
-    out = extract_profile_fields(SAMPLE)
-    assert out["target_titles"] == [
-        "Senior Software Engineer",
-        "Software Engineer",
-        "Platform Engineer",
-    ]
+    """The résumé's own titles lead the list.
+
+    Asserted by containment rather than exact equality: targeting now also
+    carries adjacent roles, and pinning the whole list to a literal is what let
+    a fresh clone ship with five titles while this test stayed green.
+    """
+    titles = extract_profile_fields(SAMPLE)["target_titles"]
+    assert titles[0] == "Senior Software Engineer"
+    for expected in ("Software Engineer", "Platform Engineer"):
+        assert expected in titles, titles
+    assert len(titles) == len(set(titles))
 
 
 def test_extracts_multiple_titles_without_duplicates():
@@ -100,13 +105,11 @@ pat@example.com
 ### Platform Engineer | Older Co | 2015 - 2018
 - work
 """
-    out = extract_profile_fields(md)
-    assert out["target_titles"] == [
-        "Lead DevOps Engineer",
-        "DevOps Engineer",
-        "Senior DevOps Engineer",
-        "Platform Engineer",
-    ]
+    titles = extract_profile_fields(md)["target_titles"]
+    assert titles[0] == "Lead DevOps Engineer"
+    for expected in ("DevOps Engineer", "Senior DevOps Engineer", "Platform Engineer"):
+        assert expected in titles, titles
+    assert len(titles) == len(set(titles)), f"duplicates: {titles}"
 
 
 def test_years_from_date_span_when_no_explicit_claim():
