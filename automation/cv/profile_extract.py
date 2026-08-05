@@ -150,12 +150,37 @@ _NOT_A_PLACE = {
     "mobile", "tel", "www.", "linkedin", "github", "portfolio",
 }
 
+# Country and region codes people really do write as their whole location.
+# Everything else in caps on a CV is a technology, and a skills row sits close
+# enough to the contact row to be mistaken for it.
+_PLACE_ACRONYMS = {"USA", "US", "UK", "UAE", "EU", "NYC", "SF", "LA", "DC"}
+
+
+def _is_bare_acronym(line: str) -> bool:
+    """True for AWS, GCP, SQL, CI/CD — caps with no lowercase and no comma.
+
+    A real one-word city on a résumé is written in title case: Bangalore,
+    London, Pune. "AWS" was being read as the candidate's home city, which then
+    seeded preferred_locations and skewed the location score on every job.
+    """
+    s = line.strip()
+    if s.upper() in _PLACE_ACRONYMS:
+        return False
+    letters = [c for c in s if c.isalpha()]
+    return bool(letters) and all(c.isupper() for c in letters) and len(s) <= 6
+
 
 def _single_token_location(line: str) -> bool:
     words = line.split()
     if "," in line or not 1 <= len(words) <= 3:
         return False
-    if len(line) < 3 or line.strip().lower() in _NOT_A_PLACE:
+    # "UK" is two characters and a real answer, so the length floor lets the
+    # known country codes past.
+    if line.strip().upper() not in _PLACE_ACRONYMS and len(line) < 3:
+        return False
+    if line.strip().lower() in _NOT_A_PLACE:
+        return False
+    if _is_bare_acronym(line):
         return False
     # A dot with no space after it is a domain, not an abbreviation:
     # "linkedin.com" is out, "St. Louis" stays in. Without this the domain won
@@ -254,6 +279,28 @@ def _headline_title(head: str) -> list[str]:
     return []
 
 
+_ADJACENT_ROLES = {
+    "site reliability": ["Platform Engineer", "Infrastructure Engineer",
+                         "DevOps Engineer", "Cloud Engineer"],
+    "devops":           ["Site Reliability Engineer", "SRE", "Platform Engineer",
+                         "Infrastructure Engineer"],
+    "platform engineer": ["Site Reliability Engineer", "SRE",
+                          "Infrastructure Engineer", "DevOps Engineer"],
+    "mlops":            ["MLOps Engineer", "AIOps Engineer",
+                         "Machine Learning Engineer", "Platform Engineer"],
+    "aiops":            ["AIOps Engineer", "MLOps Engineer", "SRE",
+                         "Observability Engineer"],
+    "infrastructure":   ["Infrastructure Engineer", "Platform Engineer",
+                         "Site Reliability Engineer", "Cloud Engineer"],
+    "cloud engineer":   ["Cloud Engineer", "Platform Engineer",
+                         "Infrastructure Engineer", "DevOps Engineer"],
+    "data engineer":    ["Data Engineer", "Analytics Engineer",
+                         "Data Platform Engineer"],
+    "backend":          ["Backend Engineer", "Software Engineer",
+                         "Platform Engineer"],
+}
+
+
 def _title_aliases(title: str) -> list[str]:
     out: list[str] = []
 
@@ -268,13 +315,24 @@ def _title_aliases(title: str) -> list[str]:
         _add(stripped)
 
     lower = title.lower()
-    if "site reliability engineer" in lower:
+    if "site reliability engineer" in lower or lower.strip() == "sre":
         _add("SRE")
         _add("Site Reliability Engineer")
     if "devops" in lower:
         _add("DevOps Engineer")
     if "platform engineer" in lower:
         _add("Platform Engineer")
+
+    # Adjacent roles. A résumé names the jobs someone has held, which is a
+    # narrower set than the jobs they can get: an SRE is read for Platform,
+    # Infrastructure, Cloud and DevOps openings too. Without this a new profile
+    # searches only the words already on the CV, and discovery reads eleven
+    # thousand postings to keep about fifty.
+    for trigger, neighbours in _ADJACENT_ROLES.items():
+        if trigger in lower:
+            for n in neighbours:
+                _add(n)
+            break
     return out
 
 
@@ -317,11 +375,16 @@ def extract_profile_fields(md: str) -> dict[str, Any]:
         out["years_exp"] = years_exp
     if titles:
         expanded: list[str] = []
-        for i, title in enumerate(titles[:5]):
-            aliases = _title_aliases(title) if i == 0 else [title]
-            for alias in aliases:
+        # Every title gets expanded, not only the first. Expanding titles[0]
+        # alone is why a fresh onboarding produced five target titles where the
+        # same CV should give a dozen: discovery still reads ~11,000 postings a
+        # scan, but the title filter throws away almost everything that isn't
+        # the one role the résumé happened to list first.
+        for title in titles[:6]:
+            for alias in _title_aliases(title):
                 if alias not in expanded:
                     expanded.append(alias)
+        del expanded[16:]
         out["target_titles"] = expanded
 
     return out
