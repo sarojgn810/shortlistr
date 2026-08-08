@@ -66,39 +66,25 @@ def test_get_workday_boards_from_portals(tmp_path, monkeypatch):
 # different myworkdayjobs tenant, so overlapping them adds no load per host.
 
 
-def test_boards_are_scraped_concurrently(monkeypatch):
-    """Sequential would take len(boards) * delay; parallel takes about one delay."""
-    import time
-
+def test_boards_are_scraped_concurrently(monkeypatch, overlap_gate):
+    """Every board must be in flight at once, not walked one after another."""
     from scrapers import workday_scraper as ws
 
     boards = [(f"tenant{i}", "1", "site", f"Co {i}") for i in range(8)]
     monkeypatch.setattr(ws, "_company_list", lambda: boards)
 
-    in_flight = 0
-    peak = 0
-    delay = 0.25
+    # fetch_workday_raw pools at min(10, len(boards)), so all eight run together.
+    gate, ran_alone = overlap_gate(len(boards))
 
     def fake_scrape(tenant, wd_n, site, *, display_name=None):
-        nonlocal in_flight, peak
-        in_flight += 1
-        peak = max(peak, in_flight)
-        try:
-            time.sleep(delay)
-            return [f"job-{tenant}"]
-        finally:
-            in_flight -= 1
+        gate()
+        return [f"job-{tenant}"]
 
     monkeypatch.setattr(ws, "_scrape_company", fake_scrape)
-
-    t0 = time.monotonic()
     jobs = ws.fetch_workday_raw()
-    elapsed = time.monotonic() - t0
 
+    assert not ran_alone.is_set(), "boards were scraped one at a time"
     assert len(jobs) == len(boards), "every board must still be scraped"
-    assert peak > 1, "boards were scraped one at a time"
-    # Generous bound: sequential would be 8 * 0.25 = 2.0s.
-    assert elapsed < len(boards) * delay * 0.6, f"looks sequential: {elapsed:.2f}s"
 
 
 def test_one_failing_board_does_not_lose_the_others(monkeypatch):

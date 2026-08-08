@@ -183,28 +183,22 @@ def test_a_posting_with_no_id_is_skipped():
 
 # ── boards run together ──────────────────────────────────────────────────────
 
-def test_boards_are_fetched_in_parallel(monkeypatch):
-    import time
-
+def test_boards_are_fetched_in_parallel(monkeypatch, overlap_gate):
     from scrapers import smartrecruiters_scraper as sr
 
-    tracker = {"in_flight": 0, "peak": 0}
+    slugs = [f"co{i}" for i in range(6)]
+    # fetch_smartrecruiters_raw pools at min(8, len(slugs)), so all six run together.
+    gate, ran_alone = overlap_gate(len(slugs))
 
-    def slow(slug):
-        tracker["in_flight"] += 1
-        tracker["peak"] = max(tracker["peak"], tracker["in_flight"])
-        try:
-            time.sleep(0.2)
-            return [f"job-{slug}"]
-        finally:
-            tracker["in_flight"] -= 1
+    def one(slug):
+        gate()
+        return [f"job-{slug}"]
 
-    monkeypatch.setattr(sr, "_scrape_company", slow)
-    t0 = time.monotonic()
-    out = sr.fetch_smartrecruiters_raw([f"co{i}" for i in range(6)])
-    assert len(out) == 6
-    assert tracker["peak"] > 1, "boards were fetched one at a time"
-    assert time.monotonic() - t0 < 6 * 0.2 * 0.6
+    monkeypatch.setattr(sr, "_scrape_company", one)
+    out = sr.fetch_smartrecruiters_raw(slugs)
+
+    assert not ran_alone.is_set(), "boards were fetched one at a time"
+    assert len(out) == len(slugs)
 
 
 def test_one_dead_board_does_not_lose_the_others(monkeypatch):
