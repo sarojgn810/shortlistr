@@ -117,38 +117,42 @@ def test_ordinary_slugs_still_resolve():
 
 def test_scanning_many_urls_runs_them_together(monkeypatch):
     """219 careers pages sequentially at a 12s timeout is 40+ minutes."""
-    import time
+    import threading
 
     from sources import ats_fingerprint as fp
 
-    tracker = {"in_flight": 0, "peak": 0}
-
-    def slow(url, **kw):
-        tracker["in_flight"] += 1
-        tracker["peak"] = max(tracker["peak"], tracker["in_flight"])
-        try:
-            time.sleep(0.2)
-            return {"url": url, "ok": False, "hit": None}
-        finally:
-            tracker["in_flight"] -= 1
-
-    monkeypatch.setattr(fp, "scan_careers_url", slow)
     urls = [f"https://co{i}.test/careers" for i in range(8)]
-    t0 = time.monotonic()
+
+    # The barrier is the whole assertion: no scan may leave until every scan
+    # has arrived, which can only happen if all eight really are in flight at
+    # once. A serial implementation leaves the first one waiting by itself
+    # until the timeout breaks it.
+    #
+    # That is a fact about the code rather than about how busy the runner is.
+    # This test used to sleep 0.2s per scan and require the total to come in
+    # under 80% of the serial cost — a bound only 0.32s clear of failure. A
+    # loaded Windows runner took 1.44s against a 1.28s limit and failed a PR
+    # that had not touched this file, the second such false alarm. The timeout
+    # below is one-sided and ~1000x the room a healthy run needs, so runner
+    # load cannot reach it; only genuinely serial work can.
+    #
+    # Sized to len(urls) because the pool is min(12, len(urls)) wide. Narrowing
+    # the pool below eight is a deliberate change, and belongs here too.
+    barrier = threading.Barrier(len(urls))
+    ran_alone = threading.Event()
+
+    def scan(url, **kw):
+        try:
+            barrier.wait(timeout=10)
+        except threading.BrokenBarrierError:
+            ran_alone.set()
+        return {"url": url, "ok": False, "hit": None}
+
+    monkeypatch.setattr(fp, "scan_careers_url", scan)
     out = fp.propose_from_urls(urls)
-    elapsed = time.monotonic() - t0
+
+    assert not ran_alone.is_set(), "scans did not overlap: they ran one at a time"
     assert len(out) == len(urls), "a URL was dropped"
-
-    # This is the real proof, and it does not depend on the clock: more than one
-    # scan was in flight at the same moment.
-    assert tracker["peak"] > 1, "scanned one at a time"
-
-    # The wall-clock check is only here to catch a regression to fully serial
-    # work, which would take 8 x 0.2 = 1.6s. It used to demand 0.96s — a 40%
-    # margin — and a shared Windows runner missed it by 8ms, failing CI on a
-    # README change. A test that fails on runner jitter teaches people to
-    # ignore CI, which costs more than the precision was worth.
-    assert elapsed < 8 * 0.2 * 0.8, f"looks serial: {elapsed:.2f}s"
 
 
 def test_proposal_order_matches_the_input(monkeypatch):
