@@ -10,31 +10,28 @@ from __future__ import annotations
 
 import os
 import sys
-import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "automation"))
 
 
-def _fake_boards(delay: float, tracker: dict, *, failing: set[str] | None = None):
+_BOARD_LABELS = ("Himalayas", "Remotive", "RemoteOK", "WeWorkRemotely",
+                 "WorkingNomads", "NoDesk", "Jobspresso")
+
+
+def _fake_boards(*, gate=None, failing: set[str] | None = None):
     failing = failing or set()
 
     def make(label: str):
         def fn():
-            tracker["in_flight"] += 1
-            tracker["peak"] = max(tracker["peak"], tracker["in_flight"])
-            try:
-                time.sleep(delay)
-                if label in failing:
-                    raise RuntimeError(f"{label} is down")
-                return [_Rec(f"https://x.test/{label}")]
-            finally:
-                tracker["in_flight"] -= 1
+            if gate:
+                gate()
+            if label in failing:
+                raise RuntimeError(f"{label} is down")
+            return [_Rec(f"https://x.test/{label}")]
 
         return fn
 
-    return [(lbl, make(lbl)) for lbl in
-            ("Himalayas", "Remotive", "RemoteOK", "WeWorkRemotely",
-             "WorkingNomads", "NoDesk", "Jobspresso")]
+    return [(lbl, make(lbl)) for lbl in _BOARD_LABELS]
 
 
 class _Rec:
@@ -42,31 +39,26 @@ class _Rec:
         self.url = url
 
 
-def test_boards_are_fetched_concurrently(monkeypatch):
+def test_boards_are_fetched_concurrently(monkeypatch, overlap_gate):
     from sources.adapters.aggregators_adapter import AggregatorsAdapter
 
-    tracker = {"in_flight": 0, "peak": 0}
-    delay = 0.25
-    boards = _fake_boards(delay, tracker)
+    # parallel_call pools at min(10, len(fns)), so all seven run together.
+    gate, ran_alone = overlap_gate(len(_BOARD_LABELS))
+    boards = _fake_boards(gate=gate)
     monkeypatch.setattr(AggregatorsAdapter, "BOARDS", boards)
 
-    t0 = time.monotonic()
     jobs, stats = AggregatorsAdapter().fetch_raw()
-    elapsed = time.monotonic() - t0
 
+    assert not ran_alone.is_set(), "boards were fetched one at a time"
     assert len(jobs) == len(boards), "a board was dropped"
     assert stats.raw_count == len(boards)
-    assert tracker["peak"] > 1, "boards were fetched one at a time"
-    # Sequential would be 7 * 0.25 = 1.75s.
-    assert elapsed < len(boards) * delay * 0.6, f"looks sequential: {elapsed:.2f}s"
 
 
 def test_one_dead_board_does_not_lose_the_others(monkeypatch):
     """A single flaky aggregator must not empty the whole source."""
     from sources.adapters.aggregators_adapter import AggregatorsAdapter
 
-    tracker = {"in_flight": 0, "peak": 0}
-    boards = _fake_boards(0.0, tracker, failing={"WorkingNomads", "NoDesk"})
+    boards = _fake_boards(failing={"WorkingNomads", "NoDesk"})
     monkeypatch.setattr(AggregatorsAdapter, "BOARDS", boards)
 
     jobs, stats = AggregatorsAdapter().fetch_raw()
@@ -85,7 +77,6 @@ def test_raw_count_matches_the_records_returned(monkeypatch):
     """stats.raw_count is summed after the gather, so it cannot drift."""
     from sources.adapters.aggregators_adapter import AggregatorsAdapter
 
-    tracker = {"in_flight": 0, "peak": 0}
-    monkeypatch.setattr(AggregatorsAdapter, "BOARDS", _fake_boards(0.0, tracker))
+    monkeypatch.setattr(AggregatorsAdapter, "BOARDS", _fake_boards())
     jobs, stats = AggregatorsAdapter().fetch_raw()
     assert stats.raw_count == len(jobs)
