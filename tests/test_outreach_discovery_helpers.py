@@ -115,37 +115,16 @@ def test_ordinary_slugs_still_resolve():
         assert hit and hit["ats_type"] == ats and hit["token"] == token
 
 
-def test_scanning_many_urls_runs_them_together(monkeypatch):
+def test_scanning_many_urls_runs_them_together(monkeypatch, overlap_gate):
     """219 careers pages sequentially at a 12s timeout is 40+ minutes."""
-    import threading
-
     from sources import ats_fingerprint as fp
 
     urls = [f"https://co{i}.test/careers" for i in range(8)]
-
-    # The barrier is the whole assertion: no scan may leave until every scan
-    # has arrived, which can only happen if all eight really are in flight at
-    # once. A serial implementation leaves the first one waiting by itself
-    # until the timeout breaks it.
-    #
-    # That is a fact about the code rather than about how busy the runner is.
-    # This test used to sleep 0.2s per scan and require the total to come in
-    # under 80% of the serial cost — a bound only 0.32s clear of failure. A
-    # loaded Windows runner took 1.44s against a 1.28s limit and failed a PR
-    # that had not touched this file, the second such false alarm. The timeout
-    # below is one-sided and ~1000x the room a healthy run needs, so runner
-    # load cannot reach it; only genuinely serial work can.
-    #
-    # Sized to len(urls) because the pool is min(12, len(urls)) wide. Narrowing
-    # the pool below eight is a deliberate change, and belongs here too.
-    barrier = threading.Barrier(len(urls))
-    ran_alone = threading.Event()
+    # propose_from_urls pools at min(12, len(urls)), so all eight run together.
+    gate, ran_alone = overlap_gate(len(urls))
 
     def scan(url, **kw):
-        try:
-            barrier.wait(timeout=10)
-        except threading.BrokenBarrierError:
-            ran_alone.set()
+        gate()
         return {"url": url, "ok": False, "hit": None}
 
     monkeypatch.setattr(fp, "scan_careers_url", scan)

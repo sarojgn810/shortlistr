@@ -4,8 +4,46 @@ from __future__ import annotations
 
 import os
 import tempfile
+import threading
 
 import pytest
+
+
+@pytest.fixture
+def overlap_gate():
+    """Assert work really runs concurrently, without timing it.
+
+    `gate, ran_alone = overlap_gate(n)` gives a callable to drop inside a fake
+    worker. No caller may leave the gate until `n` of them have arrived, which
+    can only happen if all `n` are in flight at once; serial work leaves the
+    first one waiting by itself until the timeout breaks it, and `ran_alone`
+    is set.
+
+    This replaced a stopwatch in five tests. They slept in each fake worker and
+    required the total to come in under a fraction of the serial cost, which
+    means the bound has to sit between real concurrency and real serialism —
+    and shared-runner jitter is wider than that gap. A loaded windows-latest
+    runner took 1.44s against a 1.28s limit and failed a PR that had not
+    touched the code under test, the second such false alarm. The timeout here
+    is one-sided instead: a healthy run trips the gate in microseconds, so no
+    amount of runner load reaches ten seconds, and only serial work can.
+
+    Size `n` to the pool width the code under test will actually use. A gate
+    wider than the pool can never fill, which is the failure this detects.
+    """
+    def make(n: int, *, timeout: float = 10.0):
+        barrier = threading.Barrier(n)
+        ran_alone = threading.Event()
+
+        def gate() -> None:
+            try:
+                barrier.wait(timeout=timeout)
+            except threading.BrokenBarrierError:
+                ran_alone.set()
+
+        return gate, ran_alone
+
+    return make
 
 
 @pytest.fixture(autouse=True)
