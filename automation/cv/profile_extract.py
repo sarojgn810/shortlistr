@@ -151,23 +151,80 @@ _NOT_A_PLACE = {
 }
 
 # Country and region codes people really do write as their whole location.
-# Everything else in caps on a CV is a technology, and a skills row sits close
-# enough to the contact row to be mistaken for it.
 _PLACE_ACRONYMS = {"USA", "US", "UK", "UAE", "EU", "NYC", "SF", "LA", "DC"}
+
+# A skills row sits close enough to the contact row to be read as one, and
+# every rule for "looks like a place" also fits a technology name: short,
+# alphabetic, no digits, no role word. Casing cannot separate the two — plenty
+# of résumés set the whole contact row in caps, so PUNE and DUBAI are as
+# upper-case as TERRAFORM. Naming the technologies is what actually separates
+# them.
+#
+# Tokens that are also real place names are deliberately left out (Phoenix,
+# Berlin, Austin, Cordoba). The ones kept — java, oracle, apache — are places
+# nobody writes as their home city.
+_NOT_A_PLACE_TECH = {
+    # cloud + platform
+    "aws", "gcp", "azure", "oci", "openstack", "openshift", "vmware", "heroku",
+    "cloudformation", "cloudwatch", "ec2", "s3", "eks", "ecs", "rds", "iam",
+    "vpc", "gke", "aks", "lambda", "bigquery", "snowflake", "databricks",
+    # containers + infra as code
+    "kubernetes", "k8s", "docker", "containerd", "helm", "terraform", "ansible",
+    "puppet", "chef", "vagrant", "packer", "consul", "vault", "nomad", "istio",
+    "nginx", "apache", "haproxy", "envoy",
+    # ci/cd + scm
+    "jenkins", "argocd", "gitops", "git", "github", "gitlab", "bitbucket",
+    "circleci", "travis", "teamcity", "bamboo", "jira", "confluence", "cicd",
+    "sonarqube", "artifactory", "nexus",
+    # observability
+    "prometheus", "grafana", "datadog", "splunk", "opentelemetry", "kibana",
+    "logstash", "fluentd", "nagios", "zabbix", "elk", "elasticsearch",
+    "pagerduty", "newrelic", "appdynamics", "dynatrace", "observability",
+    # languages + runtimes
+    "python", "java", "javascript", "typescript", "golang", "bash", "shell",
+    "powershell", "perl", "ruby", "php", "scala", "kotlin", "swift", "rust",
+    "groovy", "node", "nodejs", "deno", "dotnet",
+    # data stores
+    "sql", "nosql", "mysql", "postgres", "postgresql", "mongodb", "cassandra",
+    "dynamodb", "redis", "memcached", "kafka", "rabbitmq", "hadoop", "spark",
+    "airflow", "hive", "presto",
+    # os + protocols + acronyms that survive the length rule below
+    "linux", "unix", "windows", "macos", "rhel", "centos", "ubuntu", "debian",
+    "rest", "restful", "graphql", "grpc", "json", "yaml", "xml", "html", "css",
+    "http", "https", "ssh", "ssl", "tls", "dns", "tcp", "vpn", "ldap", "oauth",
+    # practices + frameworks
+    "devops", "devsecops", "sre", "mlops", "aiops", "agile", "scrum", "kanban",
+    "itil", "sdlc", "etl", "iac", "saas", "paas", "iaas", "slo", "sli", "sla",
+    "django", "flask", "spring", "react", "angular", "vue", "terraformer",
+    "selenium", "pytest", "numpy", "pandas", "tensorflow", "pytorch",
+}
 
 
 def _is_bare_acronym(line: str) -> bool:
-    """True for AWS, GCP, SQL, CI/CD — caps with no lowercase and no comma.
+    """True for an unknown two- or three-letter all-caps token: ETL, RCA, OOP.
 
-    A real one-word city on a résumé is written in title case: Bangalore,
-    London, Pune. "AWS" was being read as the candidate's home city, which then
-    seeded preferred_locations and skewed the location score on every job.
+    Deliberately not longer than three characters. Uppercase is not evidence of
+    a technology — PUNE, DELHI, DUBAI and LONDON are four to six characters and
+    are written in caps whenever the contact row is. Anything longer that is
+    really a technology is named in `_NOT_A_PLACE_TECH` instead.
     """
     s = line.strip()
     if s.upper() in _PLACE_ACRONYMS:
         return False
     letters = [c for c in s if c.isalpha()]
-    return bool(letters) and all(c.isupper() for c in letters) and len(s) <= 6
+    return bool(letters) and all(c.isupper() for c in letters) and len(s) <= 3
+
+
+def _is_technology(line: str) -> bool:
+    """True when every word in the segment names a technology.
+
+    Whole-segment rather than any-word, so a PDF-flattened skills row
+    ("AWS GCP Azure") is caught while a city that happens to share a word with
+    something in the list is not.
+    """
+    words = [w.strip(".,;:()&+").lower() for w in line.split()]
+    words = [w for w in words if w]
+    return bool(words) and all(w in _NOT_A_PLACE_TECH for w in words)
 
 
 def _single_token_location(line: str) -> bool:
@@ -180,7 +237,10 @@ def _single_token_location(line: str) -> bool:
         return False
     if line.strip().lower() in _NOT_A_PLACE:
         return False
-    if _is_bare_acronym(line):
+    # A place name never carries a slash; "CI/CD" and "AWS/GCP" do.
+    if "/" in line:
+        return False
+    if _is_bare_acronym(line) or _is_technology(line):
         return False
     # A dot with no space after it is a domain, not an abbreviation:
     # "linkedin.com" is out, "St. Louis" stays in. Without this the domain won
@@ -300,14 +360,29 @@ _ADJACENT_ROLES = {
                          "Platform Engineer"],
 }
 
+# The spelling to show for a role we already have a name for. PDF extraction
+# hands back headings set in caps, and "DEVOPS ENGINEER" is the same target as
+# "DevOps Engineer" — one of them belongs in the profile, not both.
+_CANONICAL_TITLES = {
+    name.lower(): name
+    for names in _ADJACENT_ROLES.values()
+    for name in names
+}
+
 
 def _title_aliases(title: str) -> list[str]:
     out: list[str] = []
+    seen: set[str] = set()
 
     def _add(candidate: str) -> None:
         candidate = re.sub(r"\s+", " ", candidate).strip(" ,")
-        if candidate and candidate not in out:
-            out.append(candidate)
+        if not candidate:
+            return
+        candidate = _CANONICAL_TITLES.get(candidate.lower(), candidate)
+        if candidate.lower() in seen:
+            return
+        seen.add(candidate.lower())
+        out.append(candidate)
 
     _add(title)
     stripped = _SENIORITY_PREFIX_RE.sub("", title).strip()
@@ -328,11 +403,16 @@ def _title_aliases(title: str) -> list[str]:
     # Infrastructure, Cloud and DevOps openings too. Without this a new profile
     # searches only the words already on the CV, and discovery reads eleven
     # thousand postings to keep about fifty.
-    for trigger, neighbours in _ADJACENT_ROLES.items():
-        if trigger in lower:
-            for n in neighbours:
-                _add(n)
-            break
+    #
+    # The family is chosen by where the title puts each trigger, not by where
+    # this dict happens to list it. "MLOps Platform Engineer" matched
+    # "platform engineer" first on dict order alone and came out with the SRE
+    # family and no ML family at all — the qualifier a title leads with is the
+    # specialisation. Ties go to the longer, more specific trigger.
+    hits = [(lower.index(t), -len(t), t) for t in _ADJACENT_ROLES if t in lower]
+    if hits:
+        for n in _ADJACENT_ROLES[min(hits)[2]]:
+            _add(n)
     return out
 
 
@@ -380,9 +460,11 @@ def extract_profile_fields(md: str) -> dict[str, Any]:
         # same CV should give a dozen: discovery still reads ~11,000 postings a
         # scan, but the title filter throws away almost everything that isn't
         # the one role the résumé happened to list first.
+        seen: set[str] = set()
         for title in titles[:6]:
             for alias in _title_aliases(title):
-                if alias not in expanded:
+                if alias.lower() not in seen:
+                    seen.add(alias.lower())
                     expanded.append(alias)
         del expanded[16:]
         out["target_titles"] = expanded

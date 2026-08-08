@@ -169,7 +169,7 @@ claims, and candidate PII sharing belong in private platform code — not here.
   can return a transient 500 — retry before treating it as a bug. **If live behavior
   contradicts green tests, check which code the server process is actually running
   before touching the algorithm.**
-- Current baseline: **900 tests pass, 0 fail.** Keep it that way. An older generation of
+- Current baseline: **1059 tests pass, 0 fail.** Keep it that way. An older generation of
   failures came from reading the live `config/profile.yml` instead of pinning their own
   targeting; they hid a real bug where saving a profile retargeted discovery but not scoring.
 - **`tests/test_discover_flow.py::test_progressive_persist_writes_after_each_source` is
@@ -187,6 +187,11 @@ claims, and candidate PII sharing belong in private platform code — not here.
   inside a test does nothing once that module is imported. This has produced a
   vacuously-passing test and a test that wrote into live data. If a test needs a
   different directory, patch the module attribute, not just the environment.
+- **A heuristic that reads styling needs fixtures in the other styling.** The
+  all-caps location bug below shipped green because every location fixture was
+  title-case — "Bangalore", "London" — so the assertions only restated the
+  assumption the code was making. If a rule keys on case, spacing or
+  punctuation, at least one fixture has to be written the other way.
 - **`deal_breakers` match the title AND the JD body; `exclude_titles` match the
   title only.** Never put a role word in `deal_breakers`. On a real inbox,
   "manager" appeared in 27 of 161 postings and in only 6 titles, so filtering
@@ -197,6 +202,16 @@ claims, and candidate PII sharing belong in private platform code — not here.
   and it hides how narrow the list really is. It is also the first gate in
   discovery — an unlisted title is dropped before it is scored, so this one value
   decides most of what the user ever sees.
+- **Surface form is not a category — name the members instead.** Onboarding read
+  "AWS" as the candidate's home city; the first fix rejected all-caps tokens up
+  to six characters, which lost PUNE, DELHI and DUBAI (caps whenever the contact
+  row is) while still accepting "Terraform", "KUBERNETES" and "AWS GCP Azure".
+  Casing, length and punctuation describe how a résumé was *typeset*, not what a
+  token means. When a heuristic must separate two categories, enumerate the
+  smaller one — `_NOT_A_PLACE_TECH` in `cv/profile_extract.py` — and let the
+  rest through. Losing the city is not the safe direction, either: no location
+  means no `preferred_locations`, which makes `LOCATION_PREFERENCE_SET` false and
+  turns the discovery geo filter off for every posting.
 - **Don't ask an LLM for a holistic score and expect a spread.** Scores clustered
   at 4.2/4.5/4.8 across 158 jobs and were uncorrelated with fit — jobs rated <40
   by discovery averaged *higher* than jobs rated 60-79. Adding rubric bands

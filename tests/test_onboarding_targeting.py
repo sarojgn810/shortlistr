@@ -40,6 +40,46 @@ def test_real_single_word_cities_still_pass():
         assert _single_token_location(town), f"{town} rejected"
 
 
+def test_longer_technology_names_are_not_read_as_a_home_city():
+    """Three letters was never the boundary — a technology of any length is one.
+
+    The first pass at this rejected all-caps tokens up to six characters, which
+    left every longer or title-case skills entry accepted: "Terraform" came out
+    of _extract_location as the candidate's city.
+    """
+    from cv.profile_extract import _single_token_location
+
+    for token in ("TERRAFORM", "KUBERNETES", "JENKINS", "GRAFANA",
+                  "Terraform", "Kubernetes", "Python",
+                  "AWS GCP Azure", "Kubernetes Terraform Python", "CI/CD"):
+        assert not _single_token_location(token), f"{token} accepted as a location"
+
+
+def test_an_all_caps_contact_row_still_yields_its_city():
+    """Uppercase is not evidence of a technology.
+
+    PUNE and DUBAI are four and five characters and are set in caps whenever the
+    contact row is, so rejecting short all-caps tokens wholesale loses the city
+    outright — and an unseeded preferred_locations turns the discovery location
+    filter off entirely.
+    """
+    from cv.profile_extract import _single_token_location, extract_profile_fields
+
+    for town in ("PUNE", "DELHI", "MUMBAI", "LONDON", "DUBAI", "BERLIN"):
+        assert _single_token_location(town), f"{town} rejected"
+
+    md = (
+        "# RAHUL SHARMA\n"
+        "PUNE | rahul@example.com | +91 90000 00000\n\n"
+        "## Experience\n"
+        "### Site Reliability Engineer\n"
+        "Acme, 2020-2024.\n"
+    )
+    out = extract_profile_fields(md)
+    assert out.get("location") == "PUNE", out
+    assert out.get("preferred_locations") == ["PUNE"], out
+
+
 def test_country_codes_survive_the_length_floor():
     """"UK" is two characters and a real answer."""
     from cv.profile_extract import _single_token_location
@@ -97,6 +137,51 @@ def test_an_sre_resume_reaches_the_adjacent_roles():
     for neighbour in ("platform engineer", "infrastructure engineer",
                       "devops engineer", "cloud engineer"):
         assert any(neighbour in a for a in aliases), f"{neighbour} missing from {aliases}"
+
+
+def test_the_title_picks_its_family_not_the_dict_order():
+    """"MLOps Platform Engineer" is an MLOps role that happens to say platform.
+
+    The trigger list is a dict, and matching it in insertion order meant
+    "platform engineer" won over "mlops" purely because it is written earlier
+    in the literal — so an ML profile was targeted at SRE and infrastructure and
+    reached no ML posting at all. The qualifier a title leads with decides.
+    """
+    from cv.profile_extract import _title_aliases
+
+    ml = [a.lower() for a in _title_aliases("MLOps Platform Engineer")]
+    assert "mlops engineer" in ml, ml
+    assert "machine learning engineer" in ml, ml
+
+    # And the reverse reading still holds where the title really does lead with
+    # the generic role.
+    plat = [a.lower() for a in _title_aliases("Platform Engineer (DevOps)")]
+    assert "site reliability engineer" in plat, plat
+
+
+def test_a_caps_heading_is_not_a_second_target_title():
+    """PDF extraction shouts; "DEVOPS ENGINEER" and "DevOps Engineer" are one.
+
+    Deduplication compared exact strings, so a résumé with caps headings put
+    both spellings in the profile — visible as duplicates in onboarding, and
+    spending slots against the cap that adjacent roles should have had.
+    """
+    from cv.profile_extract import extract_profile_fields
+
+    md = (
+        "# SAM DOE\n"
+        "Pune, India | sam@example.com\n\n"
+        "## EXPERIENCE\n"
+        "### DEVOPS ENGINEER\n"
+        "Acme, 2021-2024.\n"
+        "### SITE RELIABILITY ENGINEER\n"
+        "Globex, 2018-2021.\n"
+    )
+    titles = extract_profile_fields(md)["target_titles"]
+    assert len({t.lower() for t in titles}) == len(titles), titles
+    # The canonical spelling is the one that survives, not the shouted one.
+    assert "DevOps Engineer" in titles, titles
+    assert "Site Reliability Engineer" in titles, titles
 
 
 def test_expansion_stays_bounded():
