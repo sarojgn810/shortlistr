@@ -160,27 +160,21 @@ def test_one_dead_feed_does_not_empty_the_source(monkeypatch):
     assert stats.raw_count == 1
 
 
-def test_feeds_run_together(monkeypatch):
-    import time
-
+def test_feeds_run_together(monkeypatch, overlap_gate):
     from sources.adapters import public_feeds_adapter as pf
 
-    tracker = {"in_flight": 0, "peak": 0}
+    feeds = 4
+    # parallel_call pools at min(10, len(fns)), so all four run together.
+    gate, ran_alone = overlap_gate(feeds)
 
-    def slow():
-        tracker["in_flight"] += 1
-        tracker["peak"] = max(tracker["peak"], tracker["in_flight"])
-        try:
-            time.sleep(0.2)
-            return [object()]
-        finally:
-            tracker["in_flight"] -= 1
+    def one():
+        gate()
+        return [object()]
 
-    monkeypatch.setattr(pf, "_FEEDS", tuple((f"F{i}", slow) for i in range(4)))
-    t0 = time.monotonic()
+    monkeypatch.setattr(pf, "_FEEDS", tuple((f"F{i}", one) for i in range(feeds)))
     pf.PublicFeedsAdapter().fetch_raw()
-    assert tracker["peak"] > 1, "feeds ran one at a time"
-    assert time.monotonic() - t0 < 4 * 0.2 * 0.7
+
+    assert not ran_alone.is_set(), "feeds ran one at a time"
 
 
 def test_the_adapter_is_registered():
