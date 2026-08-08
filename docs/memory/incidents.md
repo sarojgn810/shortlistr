@@ -14,6 +14,62 @@ Template:
 
 ---
 
+## 2026-08-08 — Casing is not evidence of a technology (the fix for "AWS" broke Pune)
+**Symptom:** #15 stopped `AWS` being read as the candidate's home city by
+rejecting all-caps tokens up to six characters. That rule was wrong in both
+directions, and neither direction had a test that could see it.
+**Root cause:** casing was being used as the place-vs-technology signal, and it
+is not one.
+  - **False negatives.** `PUNE`, `DELHI`, `DUBAI`, `LONDON`, `BERLIN` are four
+    to six characters and are set in caps whenever the contact row is.
+    `_single_token_location('PUNE')` returned `True` before #15 and `False`
+    after. The consequence is bigger than a blank field: no `location` means
+    `preferred_locations` is never seeded, `config.LOCATION_PREFERENCE_SET`
+    evaluates `False`, and `pipeline/filter.py:83` then short-circuits
+    `passes_title_location` to `True` for **every** posting — the geo filter
+    silently stops filtering.
+  - **False positives.** The rule missed anything longer or title-case, so the
+    original bug was still live one token up: `_extract_location` still returned
+    `Terraform`, `KUBERNETES`, `JENKINS` and `AWS GCP Azure` as places.
+    `looks_like_location` (`linkedin_optimizer/parser.py`) accepts any 2–30 char
+    alphabetic part with no role word, so it cannot be the backstop here.
+**Fix (#16, `cv/profile_extract.py`):** `_NOT_A_PLACE_TECH` names the
+technologies. A segment is rejected when *every* word in it is one —
+whole-segment, so a PDF-flattened skills row is caught while a city sharing a
+word with the list is not. Tokens that are also real places (Phoenix, Berlin,
+Austin, Cordoba) are deliberately excluded; `java`, `oracle`, `apache` are kept.
+The all-caps rule survives capped at **three** characters as the generic catch
+for unknown acronyms (ETL, RCA, OOP), and a segment carrying a slash is never a
+place — which is what `CI/CD` needed all along.
+**Two more from the same review, same file:**
+  - `_ADJACENT_ROLES` was matched in **dict insertion order** and broke on the
+    first hit, so `MLOps Platform Engineer` matched `platform engineer` before
+    `mlops` was tested and got the SRE family with no ML family at all. Since
+    `target_titles` is the first discovery gate and is substring-matched, that
+    profile could only ever see a posting titled "MLOps Platform Engineer". The
+    family now follows where the *title* puts each trigger, ties to the longer.
+  - Title dedupe compared exact strings, so caps headings put both
+    `DEVOPS ENGINEER` and `DevOps Engineer` in the profile — duplicates in the
+    onboarding UI, and slots spent against the 16-title cap. Dedupe is
+    case-insensitive now, with `_CANONICAL_TITLES` choosing the spelling.
+**Not fixed:** `Data Infrastructure Engineer` still misses the Data/Analytics
+family. That is not an ordering problem — `"data engineer"` is not a substring
+of it. A broader `"data "` trigger would also catch `Data Center Engineer`, so
+widening the first discovery gate on that guess was not worth it.
+**Guard:** four tests in `tests/test_onboarding_targeting.py`, each failing
+against the previous code —
+`test_longer_technology_names_are_not_read_as_a_home_city`,
+`test_an_all_caps_contact_row_still_yields_its_city` (unit + end-to-end),
+`test_the_title_picks_its_family_not_the_dict_order`,
+`test_a_caps_heading_is_not_a_second_target_title`. 1059 tests pass.
+**Lesson worth keeping:** #15's own tests passed because every fixture was
+title-case (`Bangalore`, `London`). A heuristic that reads a *styling* property
+of the input needs fixtures in the other styling — otherwise the test only
+re-states the assumption. This is the second time in this file a green suite
+described the bug rather than caught it.
+
+---
+
 ## 2026-08-02 — Aggregators and LinkedIn guest, the last two slow sources
 **Symptom:** With Workday and Gmail dealt with, `aggregators` (14.6s) and
 `linkedin_guest` (17.7s) were most of a 42s scan.
