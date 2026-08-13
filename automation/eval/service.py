@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from config import CV_MD_PATH, LLM_CONFIG, MIN_FIT_SCORE
+from eval import scoring
 from llm import get_llm
 from models.job import JobRecord, job_id_from_url
 from store import db as store
@@ -482,9 +483,25 @@ def evaluate_job_text(
     raw_out = {**data, "eval_mode": eval_mode}
     if triage_meta:
         raw_out["triage"] = triage_meta
+
+    must_haves = _clean_must_haves(data.get("must_haves"))
+    # The score is computed from the requirement list, not read off the model's
+    # own number. Asked for both, the model produced a usable list and a useless
+    # number: 175 of 393 evaluations came back as exactly 4.5. See eval/scoring.
+    # The model's number survives only as a fallback for evaluations that listed
+    # no requirements at all — heuristic/template mode, mostly.
+    derived = scoring.score_from_evidence(must_haves)
+    model_score = _safe_float(data.get("score"))
+    if derived is not None:
+        raw_out["score"] = derived
+        raw_out["score_source"] = "evidence"
+        raw_out["model_score"] = model_score
+    else:
+        raw_out["score_source"] = eval_mode if eval_mode != "llm" else "model"
+
     result = EvalResult(
-        score=_safe_float(data.get("score")),
-        must_haves=_clean_must_haves(data.get("must_haves")),
+        score=derived if derived is not None else model_score,
+        must_haves=must_haves,
         legitimacy=str(data.get("legitimacy", "uncertain")),
         company=str(data.get("company", company)),
         role=str(data.get("role", role)),
