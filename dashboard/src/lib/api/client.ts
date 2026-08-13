@@ -583,8 +583,81 @@ export interface ChatResponse {
 }
 
 
+/** One job awaiting a decision, with the evidence behind its rank. */
+export interface ReviewItem {
+  job_id: string;
+  company: string;
+  title: string;
+  location: string;
+  url: string;
+  status: string;
+  /** Derived from met/total, not the model's own number. */
+  score: number;
+  met: number;
+  total: number;
+  /** The requirements the CV does not answer — what a cover letter must address. */
+  unmet: string[];
+  summary: string;
+}
+
+export interface ReviewQueue {
+  items: ReviewItem[];
+  /** Evaluated before requirements were recorded, so not rankable yet. */
+  pending_reevaluation: number;
+  total: number;
+}
+
+/** Whether a job can be sent unattended, and what is missing if not. */
+export interface ApplyReadiness {
+  ok: boolean;
+  status: string | null;
+  /** Written to be shown to the user — says what to do, not just that it failed. */
+  reason: string;
+}
+
+export interface ScheduledSubmission {
+  scheduled: boolean;
+  reason: string;
+  job_id?: string;
+  submit_after?: number;
+  seconds_left?: number;
+}
+
+export interface PendingSubmission {
+  job_id: string;
+  submit_after: number;
+  seconds_left: number;
+}
+
+export interface RescoreReport {
+  rescored: number;
+  skipped: number;
+  total: number;
+  top_band_before: number;
+  top_band_after: number;
+  dry_run: boolean;
+}
+
 export const api = {
   health: () => request<HealthResponse>("/health"),
+
+  reviewQueue: (limit = 50) => request<ReviewQueue>(`/review/queue?limit=${limit}`),
+
+  applyReadiness: (jobId: string) => request<ApplyReadiness>(`/apply/readiness/${jobId}`),
+  applySchedule: (jobId: string, delaySeconds = 60) =>
+    request<ScheduledSubmission>(
+      `/apply/schedule/${jobId}?delay_seconds=${delaySeconds}`,
+      { method: "POST" },
+    ),
+  applyCancel: (jobId: string) =>
+    request<{ cancelled: boolean }>(`/apply/schedule/${jobId}`, { method: "DELETE" }),
+  applyPending: () => request<{ pending: PendingSubmission[] }>("/apply/pending"),
+
+  reviewReevaluate: (limit = 200) =>
+    request<{ enqueued: number }>(`/review/reevaluate?limit=${limit}`, { method: "POST" }),
+  rescoreEvaluations: (dryRun = false) =>
+    request<RescoreReport>(`/evaluations/rescore?dry_run=${dryRun}`, { method: "POST" }),
+
   sendChat: (body: {
     message?: string;
     history?: ChatTurn[];

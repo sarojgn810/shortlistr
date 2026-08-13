@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from urllib.parse import urlparse
 from typing import Any
 
 import config as _cfg
@@ -181,6 +182,44 @@ def _salary_from_item(item: dict) -> str:
     return ""
 
 
+# Aggregators list a job under their own URL and carry the employer's real
+# application link alongside it. Keeping that link is the difference between a
+# job that can be filled in and one that can only be opened.
+_APPLY_URL_KEYS = (
+    "applyUrl", "apply_url", "applicationUrl", "externalApplyUrl",
+    "applyLink", "jobUrl",
+)
+
+# Aggregator hosts: a link back to one of these is the listing we already have,
+# not an application form.
+_AGGREGATOR_HOSTS = ("linkedin.com", "glassdoor.", "indeed.", "naukri.com", "monster.")
+
+
+def _apply_target(item: dict, listing_url: str) -> dict[str, Any]:
+    """Pull out the employer's application URL, when the source supplies one."""
+    out: dict[str, Any] = {}
+
+    apply_type = _first(item.get("applyType"), item.get("apply_type")).lower()
+    if apply_type:
+        # LinkedIn's "onsite" means Easy Apply — handled on LinkedIn behind a
+        # login, so it can never be auto-filled. Worth recording either way.
+        out["apply_type"] = "onsite" if "onsite" in apply_type else "offsite"
+
+    candidate = _first(*(item.get(k) for k in _APPLY_URL_KEYS))
+    if not candidate.startswith(("http://", "https://")):
+        return out
+    host = urlparse(candidate).netloc.lower()
+    if any(agg in host for agg in _AGGREGATOR_HOSTS):
+        # Points back at the aggregator: that is the page we already have, and
+        # storing it would claim an application form exists where none does.
+        return out
+    if candidate.rstrip("/") == (listing_url or "").rstrip("/"):
+        return out
+
+    out["apply_url"] = candidate
+    return out
+
+
 def _item_to_record(item: dict, *, source: str) -> JobRecord | None:
     # Monster (bebity): nested schema.org JobPosting under jobPosting.
     posting = item.get("jobPosting")
@@ -294,6 +333,7 @@ def _item_to_record(item: dict, *, source: str) -> JobRecord | None:
             "apify": True,
             "apify_board": source.lower().replace(" ", ""),
             "raw_keys": sorted(item.keys())[:30],
+            **_apply_target(item, url),
         },
     )
 

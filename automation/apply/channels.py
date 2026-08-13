@@ -76,3 +76,35 @@ LINK_ONLY_MESSAGE = (
     "This posting lives on a job board that has no fillable application form "
     "(LinkedIn, Naukri and similar). Open the posting and apply there."
 )
+
+
+def application_url(job_row) -> str:
+    """The URL to actually apply at, which is not always the URL we listed.
+
+    Aggregators publish a job under their own address and carry the employer's
+    application link alongside it. LinkedIn accounts for most of this pipeline
+    and none of its listing pages have a form on them, so filling anything at
+    all depends on preferring the employer's link when the source gave us one.
+
+    Falls back to the listing URL, which is the right behaviour for postings
+    scraped straight from an ATS — there the two are the same thing.
+    """
+    import json
+
+    try:
+        raw = job_row["metadata_json"]
+    except Exception:
+        raw = None
+
+    if raw:
+        try:
+            apply_url = str((json.loads(raw) or {}).get("apply_url") or "").strip()
+        except Exception:
+            apply_url = ""
+        if apply_url.startswith(("http://", "https://")):
+            return apply_url
+
+    try:
+        return str(job_row["url"] or "")
+    except Exception:
+        return ""

@@ -16,8 +16,9 @@ Companion docs (read on demand, linked from here):
 **Shortlistr** — a local-first, judgment-first job-search tool. It discovers roles,
 evaluates each one (A–G blocks + legitimacy), lets the user approve before
 applying, then tracks outcomes. Quality over blast radius — **no volume
-counters, never auto-submit**. Everything runs on the user's machine; no cloud
-accounts required.
+counters, and nothing is submitted that the user did not approve first**.
+Approval is per job and always a human decision; what follows it may be
+automatic. Everything runs on the user's machine; no cloud accounts required.
 
 **This repo is single-user.** Anyone who clones it gets a complete personal job
 search. Multi-party / referral products are out of scope here and no longer have
@@ -70,7 +71,12 @@ If a change touches any of these, manually verify the whole flow and add/keep a 
    to a default keyword set. `make api` must boot even with no profile.
 2. **Evaluate → approve → apply.** Pipeline state machine in `automation/store/status.py`:
    `pending → evaluated → approved → submitted` (+ `skipped`, + backward undo transitions).
-   Nothing is submitted without explicit user action.
+   **Approval is the gate, and only a human passes it.** Nothing reaches `submitted`
+   without a per-job approval that a person made; auto-apply then completes and sends
+   the application for jobs already carrying one. It never approves on the user's
+   behalf, and never touches a job in any other state. Submission additionally
+   refuses unless a tailored CV and cover letter exist (`apply/submit.py`) — a
+   blank auto-filled application is worse for the user than none.
 3. **Profile save → live retarget.** `save_profile_from_ui()` writes `config/profile.yml` +
    `.env` key, then calls `reload_discovery_config()` and `reload_llm_config()` so the next
    scan uses the new targeting **without an API restart**.
@@ -84,7 +90,9 @@ If a change touches any of these, manually verify the whole flow and add/keep a 
 claims, and candidate PII sharing belong in private platform code — not here.
 
 6. **Background jobs never auto-submit.** `make scheduler`, `make ingest` and
-   `make jobs-sweep` only discover, refresh and archive.
+   `make jobs-sweep` only discover, refresh and archive. Submission happens only
+   through the auto-apply worker, and only for jobs a human already approved.
+   Do not let discovery, evaluation or the sweep reach `apply/submit.py`.
 
 ---
 

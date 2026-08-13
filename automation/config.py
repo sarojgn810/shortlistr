@@ -301,6 +301,14 @@ _APPLICATION_KEYS = (
     "preferred_name",
     "cover_letter_snippet",
     "willing_to_relocate",
+    # Standard ATS screening answers. Blank means "leave it for me" —
+    # apply/screening.py declines rather than guessing, because a wrong answer
+    # on an application is far worse than an empty field.
+    "country_of_residence",
+    "on_call_ok",
+    "worked_here_before",
+    "start_date",
+    "remote_preference",
 )
 
 
