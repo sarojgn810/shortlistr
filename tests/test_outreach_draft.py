@@ -40,7 +40,7 @@ def draft(**over):
         "company": "MishiPay",
         "role": "Site Reliability Engineer",
         "contact_name": "Priya Raman",
-        "candidate_name": "Saroj Nayak",
+        "candidate_name": "Asha Menon",
         "must_haves": MUST_HAVES,
     }
     kwargs.update(over)
@@ -102,7 +102,7 @@ def test_stays_short_enough_to_be_read():
 
 
 def test_signs_off_as_the_candidate():
-    assert draft().rstrip().endswith("Saroj Nayak")
+    assert draft().rstrip().endswith("Asha Menon")
 
 
 def test_missing_contact_name_still_reads_naturally():

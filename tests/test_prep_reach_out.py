@@ -270,6 +270,6 @@ def test_a_real_person_address_still_survives():
 
     jd = "For questions contact asha.menon@example.com about the role."
 
-    emails = {c.get("email", "").lower() for c in extract_contacts_from_text(jd, company="Meril")}
+    emails = {c.get("email", "").lower() for c in extract_contacts_from_text(jd, company="Example Health")}
 
     assert "asha.menon@example.com" in emails

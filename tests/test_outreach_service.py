@@ -196,7 +196,7 @@ def test_shouty_profile_name_is_not_used_as_a_signature(store, monkeypatch):
     from prep import outreach_service
 
     # cv extraction stores the name as it appears on the résumé, in caps.
-    monkeypatch.setattr(outreach_service, "_candidate_name", lambda: "SAROJ NAYAK")
+    monkeypatch.setattr(outreach_service, "_candidate_name", lambda: "ASHA MENON")
     monkeypatch.setattr(outreach_service, "_resolved", lambda jid: {
         "people": [{"person_id": 1, "full_name": "Priya Raman", "title": "Engineering Manager"}],
         "emails": [],
@@ -204,8 +204,8 @@ def test_shouty_profile_name_is_not_used_as_a_signature(store, monkeypatch):
 
     result = outreach_service.build_outreach(JOB)
 
-    assert "SAROJ NAYAK" not in result["draft"]
-    assert "Saroj Nayak" in result["draft"]
+    assert "ASHA MENON" not in result["draft"]
+    assert "Asha Menon" in result["draft"]
 
 
 def test_mixed_case_names_are_left_alone(store, monkeypatch):

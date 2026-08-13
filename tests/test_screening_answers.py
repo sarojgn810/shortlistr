@@ -31,7 +31,7 @@ PROFILE = {
 }
 
 CV = """
-Saroj Nayak — Site Reliability Engineer
+Asha Menon — Site Reliability Engineer
 Ran production Kubernetes on AWS EKS for 4 years. Terraform, Prometheus,
 Grafana. Built CI/CD with GitLab. Python and Go for tooling.
 """
