@@ -10,6 +10,7 @@ import {
   Plug,
   Settings,
   Linkedin,
+  AudioLines,
   type LucideIcon,
 } from "lucide-react";
 
@@ -35,6 +36,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { icon: Kanban,          label: "Pipeline", href: "/pipeline" },
       { icon: Send,            label: "Apply",    href: "/apply" },
       { icon: BookOpen,        label: "Prep",     href: "/prep" },
+      { icon: AudioLines,      label: "Voice",    href: "/voice" },
     ],
   },
   {

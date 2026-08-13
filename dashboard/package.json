@@ -8,13 +8,17 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "vendor-vad": "node scripts/vendor-vad.mjs",
+    "postinstall": "node scripts/vendor-vad.mjs"
   },
   "dependencies": {
+    "@ricky0123/vad-web": "^0.0.30",
     "clsx": "^2.1.1",
     "framer-motion": "^12.28.1",
     "lucide-react": "^0.462.0",
     "next": "15.5.22",
+    "onnxruntime-web": "^1.27.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sonner": "^2.0.7",

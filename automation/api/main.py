@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import sqlite3
@@ -12,7 +13,9 @@ from typing import Optional
 from store import db as store
 
 try:
-    from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Header, UploadFile
+    from fastapi import (
+        BackgroundTasks, Depends, FastAPI, File, HTTPException, Header, Request, UploadFile,
+    )
     from fastapi.responses import FileResponse, HTMLResponse
     from pydantic import BaseModel
 except ImportError:
@@ -22,6 +25,12 @@ except ImportError:
 
 from api.auth import verify_token
 from config import SHORTLISTR_ROOT, DATA_DIR
+
+# Child of uvicorn's logger so it inherits uvicorn's handler. A standalone
+# logger here propagates to a root that has no handler under `make api`, so its
+# records are formatted and then dropped — silently, which is a poor property
+# for the line you reach for when something is silent.
+logger = logging.getLogger("uvicorn.error").getChild("shortlistr")
 
 API_TOKEN = os.environ.get("SHORTLISTR_API_TOKEN", "")
 
@@ -212,6 +221,22 @@ class AgentChatBody(BaseModel):
     history: list[dict] = []
     confirm_tool: str | None = None
     confirm_args: dict = {}
+
+
+class VoiceCommandBody(BaseModel):
+    text: str = ""
+    history: list[dict] = []
+    # True inside the follow-up window, when a bare command needs no wake phrase.
+    woken: bool = False
+    # Job in focus — from the open offer or the triage cursor, never from speech.
+    job_id: str | None = None
+    offer: dict | None = None
+    confirm_tool: str | None = None
+    confirm_args: dict = {}
+
+
+class VoiceEnsureBody(BaseModel):
+    model: str | None = None
 
 
 
@@ -1315,6 +1340,98 @@ def create_app():
         store.audit("agent_chat", "tool", "chat", {"message": (body.message or "")[:120]})
         return result
 
+    # ── Voice mode ────────────────────────────────────────────────────────────
+    #
+    # Audio never leaves the machine: the browser segments speech with Silero
+    # VAD and posts raw PCM here, faster-whisper transcribes locally, and the
+    # text goes through the same permission gate as every other tool call.
+
+    @app.get("/voice/status")
+    def voice_status(user: dict = Depends(_auth)):
+        from voice import stt
+
+        return stt.voice_status()
+
+    @app.post("/voice/ensure")
+    def voice_ensure(body: VoiceEnsureBody, user: dict = Depends(_auth)):
+        """Start the model download in the background; the UI polls /voice/status."""
+        from voice import stt
+
+        return stt.ensure_voice_async(body.model)
+
+    @app.post("/voice/transcribe")
+    async def voice_transcribe(request: Request, sample_rate: int = 16000,
+                               user: dict = Depends(_auth)):
+        """Raw 16-bit PCM in the body — mono, 16kHz, little-endian.
+
+        Binary rather than a JSON array of floats on purpose: five seconds of
+        audio is 80,000 samples, which JSON renders as ~1.6MB of text and costs
+        more to serialise than the transcription costs to run. As bytes it is
+        160KB.
+        """
+        from voice import stt
+
+        raw = await request.body()
+        if not raw:
+            return {"available": True, "text": ""}
+        try:
+            import numpy as np
+
+            pcm = np.frombuffer(raw, dtype="<i2").astype("float32") / 32768.0
+        except Exception as e:
+            raise HTTPException(400, f"Could not read audio: {e}")
+        return stt.transcribe(pcm, sample_rate=sample_rate)
+
+    @app.post("/voice/command")
+    def voice_command(body: VoiceCommandBody, user: dict = Depends(_auth)):
+        """Wake check, then the deterministic fast path, then the LLM.
+
+        The response is a superset of /agent/chat's shape so the voice console
+        and the assistant dock can share one client path.
+        """
+        from voice import intents, wake
+
+        tenant = user.get("tenant_id", "default")
+
+        if body.confirm_tool:
+            return intents.confirm(body.confirm_tool, body.confirm_args, tenant_id=tenant)
+
+        woke, remainder = wake.match_wake(body.text, woken=body.woken)
+        # Log every utterance, woken or not. A wake miss is silent by design,
+        # which makes it indistinguishable from a broken mic or mute speakers
+        # unless the transcript is written down somewhere.
+        logger.info(
+            "voice: heard=%r woken_window=%s -> woke=%s remainder=%r",
+            body.text, body.woken, woke, remainder,
+        )
+        if not woke:
+            # Room noise, or someone talking about the app rather than to it.
+            return {"reply": "", "speech": "", "actions": [], "woke": False}
+        if not remainder:
+            return {"reply": "", "speech": "Listening.", "actions": [], "woke": True}
+
+        intent = intents.resolve(remainder, offer=body.offer, job_id=body.job_id)
+        if intent.kind != "miss":
+            out = intents.run(intent, tenant_id=tenant)
+            store.audit("voice_command", "tool", intent.tool or intent.kind,
+                        {"text": remainder[:120]})
+            return {**out, "woke": True, "heard": remainder}
+
+        # Nothing matched — hand the whole utterance to the conversational core.
+        from agent.chat import chat as chat_core
+        from voice import speech_form
+
+        result = chat_core(remainder, body.history, tenant_id=tenant, style="voice")
+        store.audit("voice_command", "tool", "chat", {"text": remainder[:120]})
+        # The model is told not to use markdown, but a fallback reply or a
+        # stray asterisk still gets read aloud as "asterisk".
+        return {
+            **result,
+            "speech": speech_form.for_speech(result.get("reply", "")),
+            "woke": True,
+            "heard": remainder,
+        }
+
     @app.get("/jobs")
     def list_jobs(
         status: str = "inbox",
@@ -2058,6 +2175,15 @@ def main():
             port=port,
             reload=True,
             reload_dirs=[base],
+            # Only source changes should restart the server. automation/ also
+            # holds runtime state the app writes to itself — gmail_token.pickle,
+            # gmail_credentials.json — and by default the watcher fires on those
+            # too. A refresh mid-request restarted the server underneath an
+            # in-flight call, which the dashboard reported as "Could not reach
+            # the Shortlistr API": an alarming message for a reload nobody asked
+            # for. Long requests (a voice command waiting on an LLM) are the
+            # ones most likely to be caught.
+            reload_includes=["*.py"],
         )
     else:
         uvicorn.run(create_app(), host=host, port=port)

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import DashboardShell from "@/src/components/layout/DashboardShell";
 import PortalsFingerprintPanel from "@/src/components/connections/PortalsFingerprintPanel";
+import { VoiceCard } from "@/src/components/connections/VoiceCard";
 import { Card } from "@/src/components/ui/Card";
 import { Button } from "@/src/components/ui/Button";
 import { useProfile } from "@/src/hooks/useProfile";
@@ -1226,6 +1227,8 @@ export default function ConnectionsPage() {
         >
           <PortalsFingerprintPanel />
         </ConnectorSection>
+
+        <VoiceCard />
 
         {/* ── Email verify (optional, Reach out) ──────────────────────── */}
         <ConnectorSection

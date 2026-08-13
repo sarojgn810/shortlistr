@@ -39,6 +39,18 @@ def _memory_block(tenant_id: str) -> str:
     return ""
 
 
+# Spoken answers want the opposite of written ones: no markdown to read out, no
+# ids or URLs (unspeakable), one idea per turn, and a question at the end so the
+# user always has something to answer. This is appended rather than replacing
+# _system_prompt, which the Telegram bot also depends on.
+_VOICE_STYLE = (
+    "\n\nYou are being spoken aloud, so: use short sentences. Never use markdown, "
+    "bullets, headings or code. Never say a job id, a URL or a raw number with more "
+    "than one decimal. Give one idea per turn, under about forty words. When a "
+    "decision is open, end with a short question."
+)
+
+
 def _system_prompt(tenant_id: str) -> str:
     try:
         from agent.user_context import context_block
@@ -101,8 +113,12 @@ def chat(
     tenant_id: str = "default",
     confirm_tool: str | None = None,
     confirm_args: dict | None = None,
+    style: str = "text",
 ) -> dict:
-    """Returns {reply, actions, pending_confirm?}. confirm_tool runs a previously-gated submit."""
+    """Returns {reply, actions, pending_confirm?}. confirm_tool runs a previously-gated submit.
+
+    ``style="voice"`` asks for answers shaped to be heard rather than read.
+    """
     if confirm_tool:
         try:
             result = dispatch.call_tool(confirm_tool, confirm_args or {}, confirm=True, tenant_id=tenant_id)
@@ -116,7 +132,7 @@ def chat(
     if not provider or not provider.is_available():
         return _fallback(message, tenant_id)
 
-    system = _system_prompt(tenant_id)
+    system = _system_prompt(tenant_id) + (_VOICE_STYLE if style == "voice" else "")
     convo = ""
     for turn in history or []:
         convo += f"{turn.get('role', 'user').capitalize()}: {turn.get('content', '')}\n"

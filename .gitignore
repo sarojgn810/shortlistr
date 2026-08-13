@@ -106,3 +106,8 @@ data/*.pre-split-*
 
 # local working copy of the demo; the committed one is docs/assets/
 shortlister.mp4
+
+# Voice mode: VAD model + onnxruntime wasm, copied out of node_modules by
+# dashboard/scripts/vendor-vad.mjs on postinstall. ~40MB of build output that
+# is served from our own origin so the browser never calls a CDN to hear you.
+dashboard/public/vad/

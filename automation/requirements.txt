@@ -24,3 +24,8 @@ anthropic>=0.39
 google-genai>=1.0
 pytesseract>=0.3.10  # OCR for referrer-shared job screenshots (needs the tesseract binary)
 pillow>=10.0.0
+
+# Voice mode: local speech recognition, so no audio ever leaves the machine.
+# Pulls ctranslate2 + numpy. Every import of it is optional — an install that
+# predates this still boots the API and shows a setup card in Connections.
+faster-whisper>=1.1.0

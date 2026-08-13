@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { MessageSquare, X, ArrowUp, Sparkles } from "lucide-react";
 import { Button } from "@/src/components/ui/Button";
 import { GroqKeyModal } from "@/src/components/ai/GroqKeyModal";
+import { DictateButton } from "@/src/components/voice/DictateButton";
 import { useSetupStatus } from "@/src/hooks/useSetupStatus";
 import { api, ApiError, type ChatTurn, type PendingConfirm } from "@/src/lib/api/client";
 
@@ -184,7 +185,20 @@ export default function AssistantDock() {
           <div ref={endRef} />
         </div>
 
-        <div className="flex gap-2 border-t border-mist p-3">
+        {/* Dictation only. Spoken *commands* live on the Voice console, which
+            has the wake phrase and the confirmation card; a mic that silently
+            ran tools from a chat box would be a second, weaker gate. */}
+        <div className="flex items-center justify-between border-t border-mist px-3 pt-2">
+          <DictateButton
+            label="Speak"
+            onText={(text) => setInput((cur) => (cur ? `${cur} ${text}` : text))}
+          />
+          <a href="/voice" className="text-xs font-semibold text-stone underline hover:text-ink">
+            Voice console
+          </a>
+        </div>
+
+        <div className="flex gap-2 p-3">
           <input
             className="flex-1 rounded-2xl border border-mist bg-white px-4 py-2.5 text-base text-ink outline-none focus:border-lime/40"
             value={input}

@@ -583,8 +583,83 @@ export interface ChatResponse {
 }
 
 
+/** Local speech recognition readiness — drives the Connections voice card. */
+export interface VoiceStatus {
+  available: boolean;
+  library_installed: boolean;
+  model_downloaded: boolean;
+  model_loaded: boolean;
+  model: string;
+  phase: "idle" | "downloading" | "loading" | "ready" | "error";
+  message?: string;
+  error?: string | null;
+  reason?: string;
+}
+
+export interface TranscribeResponse {
+  available: boolean;
+  text: string;
+  duration?: number | null;
+  reason?: string;
+}
+
+/** A superset of ChatResponse — the console and the dock share one code path. */
+export interface VoiceCommandResponse extends ChatResponse {
+  /** False when the utterance never contained the wake phrase: ignore it. */
+  woke: boolean;
+  /** What to say out loud. Distinct from `reply`, which may carry detail. */
+  speech: string;
+  /** The command with the wake phrase stripped. */
+  heard?: string;
+  /** Spoken before a slow tool runs, so a wait is never silent. */
+  ack?: string;
+  /** Client-side route to push. */
+  nav?: string;
+  /** Triage cursor move: next | approve | skip | start | mute. */
+  triage?: string;
+  /** A long job was queued; poll its status and announce completion. */
+  watch?: { kind: "discover" };
+  /** No pattern matched and the LLM was not consulted. */
+  miss?: boolean;
+}
+
 export const api = {
   health: () => request<HealthResponse>("/health"),
+
+  voiceStatus: () => request<VoiceStatus>("/voice/status"),
+  voiceEnsure: (model?: string) =>
+    request<VoiceStatus>("/voice/ensure", {
+      method: "POST",
+      body: JSON.stringify({ model: model ?? null }),
+      headers: { "Content-Type": "application/json" },
+    }),
+
+  /** Post raw 16-bit mono PCM. Bytes, not a JSON float array: five seconds is
+   *  160KB this way and ~1.6MB as JSON, which would cost more to serialise
+   *  than the transcription costs to run. */
+  transcribe: (pcm: Int16Array, sampleRate = 16000) =>
+    request<TranscribeResponse>(`/voice/transcribe?sample_rate=${sampleRate}`, {
+      method: "POST",
+      body: new Blob([pcm.buffer as ArrayBuffer]),
+      timeoutMs: 30_000,
+    }),
+
+  voiceCommand: (body: {
+    text?: string;
+    history?: ChatTurn[];
+    woken?: boolean;
+    job_id?: string | null;
+    offer?: { job_id: string; options: string[] } | null;
+    confirm_tool?: string;
+    confirm_args?: Record<string, unknown>;
+  }) =>
+    request<VoiceCommandResponse>("/voice/command", {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json" },
+      timeoutMs: 90_000,
+    }),
+
   sendChat: (body: {
     message?: string;
     history?: ChatTurn[];

@@ -702,6 +702,14 @@ LLM_CONFIG = {
     in ("true", "1", "yes"),
 }
 
+_voice = _PROFILE.get("voice") if isinstance(_PROFILE.get("voice"), dict) else {}
+VOICE_CONFIG = {
+    # Whisper size for local speech recognition. tiny.en runs a command in
+    # ~200ms on a laptop; base.en is roughly twice that and reads long open
+    # questions more accurately.
+    "model": str(_voice.get("model", "tiny.en")),
+}
+
 # ── Platform credentials ──────────────────────────────────────────────────────
 
 LINKEDIN_CONFIG = {

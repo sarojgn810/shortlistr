@@ -309,3 +309,28 @@ def test_outcome_capture_classify():
     outcome, conf = classify_outcome("Application Update", "Unfortunately we will not be proceeding with your application")
     assert outcome == "rejected"
     assert conf >= 8
+
+
+def test_voice_feature_carries_no_third_party_branding():
+    """The voice console is "Voice", never a borrowed character name.
+
+    "Jarvis" is Marvel's. It reads as a harmless shorthand while a feature is
+    being sketched, then survives into routes, component names and user-facing
+    copy where it is someone else's trademark. Cheaper to keep out than to rip
+    out later.
+    """
+    import subprocess
+
+    result = subprocess.run(
+        [
+            "git", "grep", "-ril", "jarvis", "--", ".",
+            ":!*.lock",
+            ":!package-lock.json",
+            ":!tests/test_architecture.py",   # this file names it to forbid it
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    # git grep exits 1 when it finds nothing, which is the outcome we want.
+    assert result.returncode == 1, f"third-party branding found in:\n{result.stdout}"
