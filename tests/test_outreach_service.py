@@ -146,3 +146,77 @@ def test_missing_job_is_handled(store):
     result = outreach_service.build_outreach("ffffffffffffffff")
 
     assert result["ok"] is False
+
+
+# ── Details that only showed up against real resolved data ───────────────────
+
+
+def test_picks_the_email_for_the_chosen_person(store, monkeypatch):
+    from prep import outreach_service
+
+    # cr_email_candidate links to a person by person_id. Matching on full_name
+    # silently found nothing, so every draft said "(no email resolved)" even
+    # with eight candidates sitting in the table.
+    monkeypatch.setattr(outreach_service, "_resolved", lambda jid: {
+        "people": [{"person_id": 17, "full_name": "Vishal Kanchan",
+                    "title": "Engineering Manager", "source": "title_ladder"}],
+        "emails": [
+            {"person_id": 99, "email": "someone.else@entrupy.com", "final_score": 0.9,
+             "verify_status": "unverified"},
+            {"person_id": 17, "email": "vkanchan@entrupy.com", "final_score": 0.52,
+             "verify_status": "unverified"},
+            {"person_id": 17, "email": "vishal.kanchan@entrupy.com", "final_score": 0.63,
+             "verify_status": "unverified"},
+        ],
+    })
+
+    result = outreach_service.build_outreach(JOB)
+
+    assert result["email"] == "vishal.kanchan@entrupy.com", "wrong person or weaker candidate"
+
+
+def test_says_when_an_address_is_only_a_guess(store, monkeypatch):
+    from prep import outreach_service
+
+    monkeypatch.setattr(outreach_service, "_resolved", lambda jid: {
+        "people": [{"person_id": 17, "full_name": "Vishal Kanchan",
+                    "title": "Engineering Manager"}],
+        "emails": [{"person_id": 17, "email": "vishal.kanchan@entrupy.com",
+                    "final_score": 0.63, "verify_status": "unverified"}],
+    })
+
+    result = outreach_service.build_outreach(JOB)
+
+    # These are pattern guesses (first.last@, flast@ …). Presenting one as fact
+    # invites a bounce, and repeated bounces hurt the sender.
+    assert result["email_verified"] is False
+
+
+def test_shouty_profile_name_is_not_used_as_a_signature(store, monkeypatch):
+    from prep import outreach_service
+
+    # cv extraction stores the name as it appears on the résumé, in caps.
+    monkeypatch.setattr(outreach_service, "_candidate_name", lambda: "SAROJ NAYAK")
+    monkeypatch.setattr(outreach_service, "_resolved", lambda jid: {
+        "people": [{"person_id": 1, "full_name": "Priya Raman", "title": "Engineering Manager"}],
+        "emails": [],
+    })
+
+    result = outreach_service.build_outreach(JOB)
+
+    assert "SAROJ NAYAK" not in result["draft"]
+    assert "Saroj Nayak" in result["draft"]
+
+
+def test_mixed_case_names_are_left_alone(store, monkeypatch):
+    from prep import outreach_service
+
+    monkeypatch.setattr(outreach_service, "_candidate_name", lambda: "Mary-Jane O'Brien")
+    monkeypatch.setattr(outreach_service, "_resolved", lambda jid: {
+        "people": [{"person_id": 1, "full_name": "Priya Raman", "title": "Engineering Manager"}],
+        "emails": [],
+    })
+
+    result = outreach_service.build_outreach(JOB)
+
+    assert "Mary-Jane O'Brien" in result["draft"]

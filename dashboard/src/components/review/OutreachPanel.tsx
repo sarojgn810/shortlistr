@@ -78,6 +78,13 @@ export function OutreachPanel({ jobId }: { jobId: string }) {
             {state.contact?.title}
             {state.email ? ` · ${state.email}` : ""}
           </p>
+          {state.email && !state.email_verified && (
+            // These are pattern guesses — first.last@, flast@ and so on. Saying
+            // so beats a bounce the user only finds out about later.
+            <p className="mt-0.5 text-xs text-orange">
+              Address is a guess from the company&apos;s naming pattern — check it before sending.
+            </p>
+          )}
         </div>
         <button
           onClick={() => void copy()}

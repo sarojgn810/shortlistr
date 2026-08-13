@@ -67,13 +67,34 @@ def _candidate_name() -> str:
         return ""
 
 
-def _email_for(person: dict[str, Any], emails: list[dict[str, Any]]) -> str:
-    """Best known address for this person, if one was resolved."""
-    name = str(person.get("full_name") or "").lower()
-    for entry in emails:
-        if str(entry.get("full_name") or "").lower() == name:
-            return str(entry.get("email") or "")
-    return ""
+def _signature_name() -> str:
+    """The name as a person writes it, not as a résumé typesets it.
+
+    CV extraction keeps whatever the document used, and résumés are routinely
+    set in caps — signing an email "SAROJ NAYAK" reads as shouting. Only an
+    all-caps name is touched; anything with existing mixed case ("Mary-Jane
+    O'Brien", "McDonald") is already how its owner writes it.
+    """
+    name = _candidate_name()
+    if name and name == name.upper():
+        return " ".join(part.capitalize() for part in name.split())
+    return name
+
+
+def _best_email(person: dict[str, Any], emails: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Strongest candidate address for this person.
+
+    Addresses link to a person by ``person_id``. An earlier version matched on
+    ``full_name``, which the email rows do not carry, so every draft reported
+    no address while eight candidates sat in the table.
+    """
+    person_id = person.get("person_id")
+    if person_id is None:
+        return None
+    mine = [e for e in emails if e.get("person_id") == person_id and e.get("email")]
+    if not mine:
+        return None
+    return max(mine, key=lambda e: float(e.get("final_score") or 0))
 
 
 def build_outreach(job_id: str) -> dict[str, Any]:
@@ -110,13 +131,18 @@ def build_outreach(job_id: str) -> dict[str, Any]:
             company=company,
             role=role,
             contact_name=str(person.get("full_name") or ""),
-            candidate_name=_candidate_name(),
+            candidate_name=_signature_name(),
             must_haves=_must_haves(job_id),
         )
+        best = _best_email(person, list(resolution.get("emails") or []))
         return {
             "ok": True,
             "contact": person,
-            "email": _email_for(person, list(resolution.get("emails") or [])),
+            "email": str((best or {}).get("email") or ""),
+            # Addresses are usually pattern guesses (first.last@, flast@ …).
+            # Presenting one as fact invites a bounce, and repeated bounces
+            # count against the sender.
+            "email_verified": bool(best) and str(best.get("verify_status") or "") == "valid",
             "draft": draft,
             "reason": verdict.reason,
         }

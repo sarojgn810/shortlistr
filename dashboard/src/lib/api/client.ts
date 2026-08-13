@@ -612,6 +612,8 @@ export interface OutreachDraft {
   ok: boolean;
   contact: { full_name?: string; title?: string; linkedin_url?: string } | null;
   email?: string;
+  /** False when the address is a guess from the company's naming pattern. */
+  email_verified?: boolean;
   draft: string;
   /** Why this contact was chosen — or why none was. Shown either way. */
   reason: string;
