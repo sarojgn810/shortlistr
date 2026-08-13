@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   Radar,
   Kanban,
+  ListChecks,
   Send,
   BookOpen,
   BarChart2,
@@ -32,6 +33,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { icon: LayoutDashboard, label: "Today",    href: "/dashboard" },
       { icon: Radar,           label: "Discover", href: "/inbox" },
+      { icon: ListChecks,      label: "Review",   href: "/review" },
       { icon: Kanban,          label: "Pipeline", href: "/pipeline" },
       { icon: Send,            label: "Apply",    href: "/apply" },
       { icon: BookOpen,        label: "Prep",     href: "/prep" },
