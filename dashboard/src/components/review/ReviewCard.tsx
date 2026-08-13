@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, X, ExternalLink, MapPin, Send } from "lucide-react";
+import { OutreachPanel } from "@/src/components/review/OutreachPanel";
 import type { ReviewItem } from "@/src/lib/api/client";
 
 /**
@@ -102,6 +103,10 @@ export function ReviewCard({
             Open posting <ExternalLink size={13} />
           </a>
         )}
+      </div>
+
+      <div className="mt-4 border-t border-mist pt-4">
+        <OutreachPanel jobId={item.job_id} />
       </div>
     </article>
   );

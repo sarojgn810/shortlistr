@@ -607,6 +607,16 @@ export interface ReviewQueue {
   total: number;
 }
 
+/** A drafted message and the contact it is for. Never sent by the app. */
+export interface OutreachDraft {
+  ok: boolean;
+  contact: { full_name?: string; title?: string; linkedin_url?: string } | null;
+  email?: string;
+  draft: string;
+  /** Why this contact was chosen — or why none was. Shown either way. */
+  reason: string;
+}
+
 /** Whether a job can be sent unattended, and what is missing if not. */
 export interface ApplyReadiness {
   ok: boolean;
@@ -642,6 +652,8 @@ export const api = {
   health: () => request<HealthResponse>("/health"),
 
   reviewQueue: (limit = 50) => request<ReviewQueue>(`/review/queue?limit=${limit}`),
+
+  outreachDraft: (jobId: string) => request<OutreachDraft>(`/jobs/${jobId}/outreach/draft`),
 
   applyReadiness: (jobId: string) => request<ApplyReadiness>(`/apply/readiness/${jobId}`),
   applySchedule: (jobId: string, delaySeconds = 60) =>

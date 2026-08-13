@@ -1678,6 +1678,17 @@ def create_app():
         with store.db() as conn:
             return fetch_tracker_board(conn, relevance=relevance)
 
+    @app.get("/jobs/{job_id}/outreach/draft")
+    def outreach_draft(job_id: str, user: dict = Depends(_auth)):
+        """Who to write to about this job, and a draft grounded in the evaluation.
+
+        Drafts only. Sending stays with the user — there is no endpoint here
+        that delivers a message.
+        """
+        from prep.outreach_service import build_outreach
+
+        return build_outreach(job_id)
+
     @app.post("/apply/schedule/{job_id}")
     def apply_schedule(job_id: str, delay_seconds: int = 60, user: dict = Depends(_auth)):
         """Queue an approved job for submission after an undo window.
