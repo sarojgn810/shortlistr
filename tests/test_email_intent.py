@@ -37,8 +37,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "automation"))
     ("10+ Top Tech Jobs Curated for You", "job_digest"),
     ("Remotive Job Alert", "job_digest"),
     ("Associate Site Reliability Engineer at Shell and 11 more jobs", "job_digest"),
-    ("Saroj Nayak, New Job Opportunities for Site Reliability Engineer", "job_digest"),
-    ("Saroj Nayak, Unlock Your Potential: Jobs you might have missed", "job_digest"),
+    ("Asha Menon, New Job Opportunities for Site Reliability Engineer", "job_digest"),
+    ("Asha Menon, Unlock Your Potential: Jobs you might have missed", "job_digest"),
     # One named role.
     ("Hiring | AI Engineer at Tiger Analytics", "single_posting"),
     ("Staff Software Engineer, Reliability at Metropolis Healthcare", "single_posting"),
