@@ -53,7 +53,19 @@ def _schema_version(conn: sqlite3.Connection) -> int:
 
 def _add_column_if_missing(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
     """SQLite has no ADD COLUMN IF NOT EXISTS; a migration that half-applied must
-    still be safe to re-run."""
+    still be safe to re-run.
+
+    A missing *table* is not an error either. PRAGMA table_info returns an empty
+    list for a table that does not exist rather than raising, so the column was
+    always judged missing and the ALTER then failed with "no such table" — which
+    aborted the whole ladder. That is reachable for `referrals`, which the v7
+    step touches but v17 dropped, so any database rebuilt after v17 has a v7 step
+    referring to something no longer there.
+    """
+    if not conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
+    ).fetchone():
+        return
     cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
     if column not in cols:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")

@@ -49,7 +49,11 @@ def test_only_the_submit_module_asks_for_a_submit():
         for name in files:
             if not name.endswith(".py"):
                 continue
-            rel = os.path.relpath(os.path.join(folder, name), AUTOMATION)
+            # os.path.relpath returns "apply\submit.py" on Windows, which never
+            # matched the POSIX spellings below — so the two files allowed to
+            # request a submit were reported as violations and only Windows CI
+            # noticed.
+            rel = os.path.relpath(os.path.join(folder, name), AUTOMATION).replace(os.sep, "/")
             if rel in ("apply/submit.py", "apply/ats_fill.py"):
                 continue
             body = read(rel)
