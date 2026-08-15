@@ -231,6 +231,14 @@ def process_pending(limit: int = 10) -> int:
                     _run_discover(payload)
                 elif task_type == "evaluate":
                     _run_evaluate(payload)
+                elif task_type == "auto_apply":
+                    # Sends an application. Guarded inside: refuses unless the
+                    # undo window has elapsed and the job is still approved with
+                    # a CV and cover letter. It raises rather than sending when
+                    # anything is off, so the row fails instead of firing early.
+                    from apply.autoapply import run_scheduled_submission
+
+                    run_scheduled_submission(payload)
                 elif task_type == "scheduled_scan":
                     from scheduler.scan_scheduler import run_scheduled_scan
 

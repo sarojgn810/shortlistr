@@ -1795,6 +1795,99 @@ def create_app():
         with store.db() as conn:
             return fetch_tracker_board(conn, relevance=relevance)
 
+    @app.get("/jobs/{job_id}/outreach/draft")
+    def outreach_draft(job_id: str, user: dict = Depends(_auth)):
+        """Who to write to about this job, and a draft grounded in the evaluation.
+
+        Drafts only. Sending stays with the user — there is no endpoint here
+        that delivers a message.
+        """
+        from prep.outreach_service import build_outreach
+
+        return build_outreach(job_id)
+
+    @app.post("/apply/schedule/{job_id}")
+    def apply_schedule(job_id: str, delay_seconds: int = 60, user: dict = Depends(_auth)):
+        """Queue an approved job for submission after an undo window.
+
+        Refuses anything not approved, or without a tailored CV and cover
+        letter — see apply/submit.py. The refusal reason is meant to be shown.
+        """
+        from apply.autoapply import schedule_submission
+
+        return schedule_submission(job_id, delay_seconds=delay_seconds)
+
+    @app.delete("/apply/schedule/{job_id}")
+    def apply_cancel(job_id: str, user: dict = Depends(_auth)):
+        """Take it back, while the row is still pending."""
+        from apply.autoapply import cancel_submission
+
+        return cancel_submission(job_id)
+
+    @app.get("/apply/pending")
+    def apply_pending(user: dict = Depends(_auth)):
+        """Queued submissions and the time left on each — drives the countdown."""
+        from apply.autoapply import pending_submissions
+
+        return {"pending": pending_submissions()}
+
+    @app.get("/apply/readiness/{job_id}")
+    def apply_readiness(job_id: str, user: dict = Depends(_auth)):
+        """Can this job be sent unattended, and if not, what is missing."""
+        from apply.submit import check_preconditions
+
+        return check_preconditions(job_id)
+
+    @app.get("/review/queue")
+    def review_queue(limit: int = 50, user: dict = Depends(_auth)):
+        """Jobs awaiting a decision, ordered by evidence, best first.
+
+        Only evaluations with a requirement list are ranked — older ones carry a
+        model-guessed number that is not comparable, and are reported as
+        pending_reevaluation instead of being mixed into the ordering.
+        """
+        from review.queue import fetch_queue
+
+        return fetch_queue(limit=limit)
+
+    @app.post("/review/reevaluate")
+    def review_reevaluate(limit: int = 200, user: dict = Depends(_auth)):
+        """Queue re-evaluation for jobs whose score has no evidence behind it.
+
+        One worker task per job, so a single bad posting fails alone. The
+        dashboard polls /review/queue to watch pending_reevaluation fall.
+        """
+        from review.reevaluate import enqueue_reevaluation
+
+        result = enqueue_reevaluation(limit=limit)
+        if result["enqueued"]:
+            store.audit("review_reevaluate", "worker_queue", "batch",
+                        {"count": result["enqueued"]})
+            import threading
+
+            threading.Thread(
+                target=lambda: __import__(
+                    "workers.discovery_worker", fromlist=["process_pending"]
+                ).process_pending(limit=result["enqueued"]),
+                daemon=True,
+                name="reevaluate-immediate",
+            ).start()
+        return {"enqueued": result["enqueued"]}
+
+    @app.post("/evaluations/rescore")
+    def evaluations_rescore(dry_run: bool = False, user: dict = Depends(_auth)):
+        """Recompute stored scores from saved requirement evidence — no LLM calls.
+
+        Sibling of /evaluations/repair and, like it, deliberately not under
+        /jobs/ (that prefix has a {job_id} route which would claim it).
+        """
+        from eval.rescore import rescore_all
+
+        report = rescore_all(dry_run=dry_run)
+        if not dry_run:
+            store.audit("evaluations_rescored", "eval", "all", report)
+        return report
+
     @app.post("/evaluations/repair")
     def evaluations_repair(limit: int = 100, user: dict = Depends(_auth)):
         """Repair evaluations that fell back to the heuristic during an outage.

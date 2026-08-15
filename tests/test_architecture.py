@@ -334,3 +334,33 @@ def test_voice_feature_carries_no_third_party_branding():
     )
     # git grep exits 1 when it finds nothing, which is the outcome we want.
     assert result.returncode == 1, f"third-party branding found in:\n{result.stdout}"
+
+
+def test_migration_survives_a_table_that_no_longer_exists():
+    """A dropped table must not abort the migration ladder.
+
+    PRAGMA table_info returns an empty list for a table that does not exist
+    rather than raising, so _add_column_if_missing always judged the column
+    missing and the ALTER then failed with "no such table", aborting init_db.
+    The v7 step touches `referrals`, which v17 dropped, so any database rebuilt
+    after v17 can reach that state — it surfaced as an intermittent Windows CI
+    error on a test that had nothing to do with referrals.
+    """
+    import sqlite3
+
+    from store.db import _add_column_if_missing
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    # Must be a no-op, not an exception.
+    _add_column_if_missing(conn, "definitely_not_here", "col", "TEXT")
+
+    # And must still do its job when the table is present.
+    conn.execute("CREATE TABLE present (id INTEGER)")
+    _add_column_if_missing(conn, "present", "added", "TEXT")
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(present)").fetchall()}
+    assert "added" in cols
+
+    # Re-running is safe.
+    _add_column_if_missing(conn, "present", "added", "TEXT")

@@ -46,21 +46,86 @@ _GENERIC_LOCAL = frozenset(
     {"careers", "jobs", "hr", "recruiting", "talent", "apply", "noreply", "no-reply"}
 )
 
+# Inboxes that exist for something other than hiring. The accommodations one is
+# why this list exists: a posting listed accommodations@ so candidates with
+# disabilities could request adjustments, and it was picked up as an outreach
+# target. Writing a job pitch there is not just useless, it misuses a channel
+# people depend on.
+_NON_HIRING_LOCAL = frozenset(
+    {"accommodation", "accommodations", "accessibility", "ada", "privacy",
+     "legal", "compliance", "security", "abuse", "dpo", "gdpr", "press",
+     "media", "investors", "billing", "unsubscribe", "postmaster", "webmaster"}
+)
+
+# Templates printed in job descriptions ("write to name@company.com"). Not
+# deliverable, and writing to one looks careless.
+_PLACEHOLDER_LOCAL = frozenset(
+    {"name", "firstname", "lastname", "firstname.lastname", "first.last",
+     "yourname", "your.name", "example", "email", "someone", "user", "xxx"}
+)
+
+
+def _is_sendable_address(email: str) -> bool:
+    """False for inboxes that should never receive job outreach."""
+    local = (email or "").split("@", 1)[0].strip().lower()
+    if not local:
+        return False
+    return local not in _NON_HIRING_LOCAL and local not in _PLACEHOLDER_LOCAL
+
 
 def _contact_id(*parts: str) -> str:
     raw = "|".join(p.strip().lower() for p in parts if p and str(p).strip())
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12] if raw else "unknown"
 
 
+# A job description is scraped whole, so it carries the page furniture around
+# the posting — nav bars, CTA buttons, section headings. On one real posting
+# "Talk to Us" was a button and the words after it were the page's own headings,
+# which stored a contact named "Us Engineering Platform Engineer" and drafted
+# outreach to it. Filtering on the whole string was not enough: the junk only
+# looks wrong token by token.
+
+# Never the first word of a person's name — these begin CTA copy.
+_NOT_A_NAME_LEAD = frozenset(
+    {"us", "we", "our", "the", "your", "my", "this", "these", "here", "below",
+     "please", "email", "contact", "apply", "talk", "watch", "learn", "read"}
+)
+
+# Role, department and page-furniture vocabulary. A person's name does not
+# contain these; a scraped heading almost always does.
+_NOT_A_NAME_TOKEN = frozenset(
+    {"engineer", "engineering", "developer", "architect", "manager", "director",
+     "sales", "marketing", "recruiting", "recruiter", "talent", "acquisition",
+     "support", "operations", "department", "team", "careers", "jobs", "job",
+     "hiring", "platform", "product", "design", "finance", "legal", "remote",
+     "onsite", "hybrid", "apply", "now", "more", "info", "information"}
+)
+
+# Real names run to three words. Four capitalised words in a row is a heading.
+_MAX_NAME_WORDS = 3
+
+
 def _clean_name(name: str) -> str:
     n = re.sub(r"\s+", " ", (name or "").strip(" \t\r\n,.;:|-"))
-    # Drop obvious non-names
     if len(n) < 2 or len(n) > 60:
         return ""
     if "@" in n or "http" in n.lower():
         return ""
-    skip = {"the", "our", "team", "please", "email", "us", "here", "below"}
-    if n.lower() in skip:
+
+    words = n.split()
+    if len(words) > _MAX_NAME_WORDS:
+        return ""
+
+    lowered = [w.strip(".,'’-").lower() for w in words]
+    if not lowered or not lowered[0]:
+        return ""
+    if lowered[0] in _NOT_A_NAME_LEAD:
+        return ""
+    # One role word anywhere is enough to disqualify: "Sales", "Platform
+    # Engineer" and "Talent Acquisition" are all things, not people.
+    if any(w in _NOT_A_NAME_TOKEN for w in lowered):
+        return ""
+    if any(any(ch.isdigit() for ch in w) for w in lowered):
         return ""
     return n
 
@@ -93,7 +158,7 @@ def extract_contacts_from_text(
     for m in _NAME_BEFORE_EMAIL_RE.finditer(jd):
         name = _clean_name(m.group(1))
         email = m.group(2).strip()
-        if not email:
+        if not email or not _is_sendable_address(email):
             continue
         c = {
             "id": _contact_id(email),
@@ -109,7 +174,7 @@ def extract_contacts_from_text(
     for m in _EMAIL_RE.finditer(jd):
         email = m.group(1).strip()
         key = email.lower()
-        if key in by_email:
+        if key in by_email or not _is_sendable_address(email):
             continue
         # Look a bit left of the match for a name label
         start = max(0, m.start() - 80)
@@ -193,7 +258,7 @@ def extract_contacts_from_text(
 
     # company_email only when also present in the JD (avoid invented careers@).
     ce = (company_email or "").strip()
-    if ce and ce.lower() in jd.lower():
+    if ce and ce.lower() in jd.lower() and _is_sendable_address(ce):
         key = ce.lower()
         if key not in by_email:
             local = ce.split("@", 1)[0].lower()

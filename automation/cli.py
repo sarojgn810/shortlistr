@@ -41,6 +41,26 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "verify":
         from tracker_tools.verify_pipeline import main as run
         return run()
+    if cmd == "rescore":
+        # Recompute stored scores from the requirement evidence already saved
+        # with each evaluation — no LLM calls. --dry-run reports without writing.
+        from eval.rescore import rescore_all
+
+        report = rescore_all(dry_run="--dry-run" in rest)
+        print(
+            f"rescored {report['rescored']} of {report['total']} evaluation(s); "
+            f"{report['skipped']} had no requirement list and were left alone."
+        )
+        print(
+            f"top band (>= 4.5): {report['top_band_before']} -> {report['top_band_after']}"
+        )
+        if report["dry_run"]:
+            print("dry run — nothing written.")
+        elif report["skipped"]:
+            print(
+                f"Re-evaluate the {report['skipped']} without evidence to score them properly."
+            )
+        return 0
     if cmd == "normalize":
         from tracker_tools.normalize_statuses import main as run
         return run(rest)

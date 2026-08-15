@@ -1,7 +1,11 @@
 """
 Playwright apply assist — pre-fill Greenhouse / Lever / Ashby forms.
 
-ETHICAL RULE: Never clicks Submit / Apply. User confirms in browser.
+RULE: Submit is never clicked unless the caller explicitly asks for it, and the
+only caller that does is `apply/submit.py`, which first requires the job to be
+approved by a human and to have a tailored CV and cover letter. Filling stops
+short of sending by default; `submit=True` is the deliberate exception, not a
+convenience.
 """
 
 from __future__ import annotations
@@ -47,6 +51,15 @@ _FIELD_CANDIDATES: list[tuple[str, str]] = [
 ]
 
 
+def _cv_text() -> str:
+    """The CV, for grounding experience answers. Empty means we answer fewer questions."""
+    try:
+        with open(CV_MD_PATH, encoding="utf-8") as fh:
+            return fh.read()
+    except Exception:
+        return ""
+
+
 def _profile_fields() -> dict[str, str]:
     # Always re-read so a Profile save is live without an API restart.
     try:
@@ -84,6 +97,13 @@ def _profile_fields() -> dict[str, str]:
         "work_authorization": str(app.get("work_authorization") or ""),
         "cover_letter_snippet": str(app.get("cover_letter_snippet") or ""),
         "willing_to_relocate": str(app.get("willing_to_relocate") or ""),
+        # Standard screening answers. Blank is a valid setting and means "leave
+        # it for me" — apply/screening.py never guesses these.
+        "country_of_residence": str(app.get("country_of_residence") or ""),
+        "on_call_ok": str(app.get("on_call_ok") or ""),
+        "worked_here_before": str(app.get("worked_here_before") or ""),
+        "start_date": str(app.get("start_date") or ""),
+        "remote_preference": str(app.get("remote_preference") or ""),
     }
 
 
@@ -139,6 +159,95 @@ def _select_native(loc, value: str) -> bool:
         return False
 
 
+# react-select renders a text input with role="combobox" and no native <select>.
+# The visible text is not the answer — the committed value lives on a wrapper —
+# so .fill() types something and answers nothing.
+#
+# Scoping matters more than it looks. A bare "[role='option']" matched 246
+# elements on a Greenhouse form: the phone field's country-code picker is a
+# separate always-present widget, so the search walked a list of countries
+# looking for "Yes". React-select's own class is the reliable handle, and the
+# combobox names its menu through aria-controls / aria-owns when it has one.
+_COMBOBOX_OPTION_SELECTOR = "[class*='select__option'], [class*='menu'] [role='option']"
+
+
+def _is_combobox(field) -> bool:
+    """True for a react-select style control masquerading as a text input."""
+    try:
+        if (field.get_attribute("role") or "").lower() == "combobox":
+            return True
+        if (field.get_attribute("aria-haspopup") or "").lower() in ("true", "listbox"):
+            return True
+        return "select__input" in (field.get_attribute("class") or "")
+    except Exception:
+        return False
+
+
+def _combobox_options(page, field):
+    """The options belonging to *this* combobox, not every listbox on the page.
+
+    Prefer the menu the control names via aria-controls/aria-owns; fall back to
+    react-select's own option class. Both beat a page-wide "[role='option']",
+    which on a Greenhouse form also matches the phone widget's 246 countries.
+    """
+    for attr in ("aria-controls", "aria-owns"):
+        try:
+            menu_id = field.get_attribute(attr)
+        except Exception:
+            menu_id = None
+        if menu_id:
+            scoped = page.locator(f"#{menu_id} [role='option'], #{menu_id} li")
+            try:
+                if scoped.count():
+                    return scoped
+            except Exception:
+                pass
+    return page.locator(_COMBOBOX_OPTION_SELECTOR)
+
+
+def _fill_combobox(page, field, value: str) -> bool:
+    """Open the menu, pick an option matching ``value``, and confirm it stuck.
+
+    Returns False rather than settling for a near-miss: an unanswered question
+    leaves the user a field to fill, while the wrong option puts a false answer
+    on their application.
+    """
+    target = (value or "").strip().lower()
+    if not target:
+        return False
+
+    try:
+        field.click(timeout=2000)
+        page.wait_for_timeout(250)
+        # Typing narrows the menu on long lists (countries, for instance).
+        try:
+            field.type(value, delay=15, timeout=2000)
+            page.wait_for_timeout(350)
+        except Exception:
+            pass
+
+        options = _combobox_options(page, field)
+        for i in range(min(options.count(), 60)):
+            option = options.nth(i)
+            try:
+                text = (option.inner_text(timeout=300) or "").strip()
+            except Exception:
+                continue
+            low = text.lower()
+            if not low:
+                continue
+            # Exact first, then "Yes, I am" for "Yes". Never the reverse: "No"
+            # must not match "Not applicable".
+            if low == target or low.startswith(target + ",") or low.startswith(target + " "):
+                option.click(timeout=2000)
+                page.wait_for_timeout(200)
+                return True
+    except Exception as e:
+        logger.debug("combobox fill failed for %r: %s", value, e)
+
+    return False
+
+
 def _fill_by_labels(page, profile: dict[str, str], report: dict[str, Any]) -> None:
     """Fill ATS custom questions located by visible label text."""
     for pattern, key in _LABEL_FIELDS:
@@ -149,15 +258,104 @@ def _fill_by_labels(page, profile: dict[str, str], report: dict[str, Any]) -> No
             field = page.get_by_label(re.compile(pattern, re.I)).first
             if field.count() == 0 or not field.is_visible(timeout=600):
                 continue
-            tag = str(field.evaluate("el => el.tagName") or "").lower()
-            if tag == "select":
-                if _select_native(field, value):
-                    report.setdefault("filled", []).append(key)
-            else:
-                field.fill(value, timeout=2500)
-                report.setdefault("filled", []).append(key)
+            if _set_field_value(page, field, value):
+                _mark_filled(report, key)
         except Exception as e:  # label not present / not fillable — skip
             logger.debug("label fill %s: %s", key, e)
+
+
+def _set_field_value(page, field, value: str) -> bool:
+    """Put ``value`` into whatever kind of control this is. False if it didn't take."""
+    try:
+        tag = str(field.evaluate("el => el.tagName") or "").lower()
+    except Exception:
+        tag = ""
+
+    if tag == "select":
+        return _select_native(field, value)
+    if _is_combobox(field):
+        return _fill_combobox(page, field, value)
+    try:
+        field.fill(value, timeout=2500)
+        return True
+    except Exception:
+        return False
+
+
+# Labels worth reading but never answering automatically — the resume/cover
+# uploads have their own path, and a free-text essay is not a screening answer.
+_SKIP_LABELS = re.compile(r"resume|cv\b|cover letter|attach|upload|file", re.I)
+
+
+def _labelled_fields(page) -> list[dict[str, Any]]:
+    """Every visible control on the form paired with its visible label text."""
+    try:
+        return page.evaluate(
+            """() => {
+              const out = [];
+              document.querySelectorAll('input, select, textarea').forEach((el, i) => {
+                if (el.type === 'hidden' || el.type === 'file') return;
+                const style = window.getComputedStyle(el);
+                if (style.display === 'none' || style.visibility === 'hidden') return;
+                let label = '';
+                if (el.id) {
+                  const l = document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
+                  if (l) label = l.innerText.trim();
+                }
+                if (!label && el.closest('label')) label = el.closest('label').innerText.trim();
+                if (!label) label = el.getAttribute('aria-label') || '';
+                if (!label) return;
+                el.setAttribute('data-shortlistr-idx', String(i));
+                out.push({
+                  idx: String(i),
+                  label: label.split('\\n')[0].slice(0, 200),
+                  filled: !!(el.value && el.value.trim()),
+                });
+              });
+              return out;
+            }"""
+        ) or []
+    except Exception as e:
+        logger.debug("could not enumerate labelled fields: %s", e)
+        return []
+
+
+def _answer_screening_questions(
+    page, profile: dict[str, str], report: dict[str, Any], cv_text: str = ""
+) -> None:
+    """Answer the posting's own screening questions from the profile and CV.
+
+    The named fields above cover what every form asks. This covers what *this*
+    form asks — "are you comfortable with on-call", "do you have hands-on AWS
+    experience" — which on Greenhouse are required, are comboboxes, and were the
+    reason a filled-looking form still could not be submitted.
+
+    ``screening.answer_for`` returns None whenever the profile and CV do not
+    actually say, and None means leave it blank. Nothing here invents an answer.
+    """
+    from apply.screening import answer_for
+
+    for field_info in _labelled_fields(page):
+        if field_info.get("filled"):
+            continue
+        label = field_info.get("label") or ""
+        if _SKIP_LABELS.search(label):
+            continue
+
+        answer = answer_for(label, profile, cv_text)
+        if not answer:
+            continue
+
+        try:
+            field = page.locator(f"[data-shortlistr-idx='{field_info['idx']}']").first
+            if field.count() == 0 or not field.is_visible(timeout=600):
+                continue
+            if _set_field_value(page, field, answer):
+                _mark_filled(report, f"q:{label[:48]}")
+            else:
+                _mark_unfilled(report, f"q:{label[:48]}")
+        except Exception as e:
+            logger.debug("screening answer failed for %r: %s", label[:40], e)
 
 
 def _ats_label(url: str) -> str:
@@ -255,6 +453,26 @@ def _greenhouse_anchor(page) -> None:
             continue
 
 
+def _mark_filled(report: dict[str, Any], key: str) -> None:
+    """Record a success, and retract any earlier failure for the same field.
+
+    Filling runs several passes — different selector sets, then each iframe — so
+    a field routinely misses on one and lands on the next. Without the retract,
+    it ends up in both lists, and a report that says a field was both filled and
+    not filled cannot be used to decide whether a form is ready to send.
+    """
+    if key not in report["filled"]:
+        report["filled"].append(key)
+    if key in report["unfilled"]:
+        report["unfilled"].remove(key)
+
+
+def _mark_unfilled(report: dict[str, Any], key: str) -> None:
+    """Record a miss, unless an earlier pass already filled it."""
+    if key not in report["filled"] and key not in report["unfilled"]:
+        report["unfilled"].append(key)
+
+
 def _fill_known_fields(
     page,
     profile: dict[str, str],
@@ -270,24 +488,21 @@ def _fill_known_fields(
         try:
             loc = page.locator(selector).first
             if loc.count() == 0:
-                if key not in report["unfilled"]:
-                    report["unfilled"].append(key)
+                _mark_unfilled(report, key)
                 continue
             if loc.is_visible(timeout=800):
                 loc.fill(value, timeout=3000)
-                if key not in report["filled"]:
-                    report["filled"].append(key)
+                _mark_filled(report, key)
         except Exception as e:
             logger.debug("Fill %s: %s", key, e)
-            if key not in report["unfilled"]:
-                report["unfilled"].append(key)
+            _mark_unfilled(report, key)
 
     if "first_name" not in report["filled"] and "full_name" not in report["filled"] and profile.get("full_name"):
         try:
             loc = page.locator("input[name*='name' i]").first
             if loc.count() and loc.is_visible(timeout=800):
                 loc.fill(profile["full_name"], timeout=3000)
-                report["filled"].append("full_name")
+                _mark_filled(report, "full_name")
         except Exception:
             pass
 
@@ -325,6 +540,32 @@ def playwright_ready() -> tuple[bool, str]:
     return False, "Playwright chromium not installed. Open Connections → Install Playwright."
 
 
+def _click_submit_control(page) -> bool:
+    """Click the form's submit control. False when there is not one to click.
+
+    Only reached via ``submit=True``. Buttons are matched on their visible
+    label, and a disabled or hidden one is skipped rather than forced — an
+    unclickable submit usually means the form still has a validation error, and
+    forcing it would send something incomplete.
+    """
+    controls = page.locator("button, input[type='submit']")
+    for i in range(min(controls.count(), 40)):
+        control = controls.nth(i)
+        try:
+            if not control.is_visible() or not control.is_enabled():
+                continue
+            label = (control.inner_text(timeout=500) or "").strip()
+            if not label:
+                label = (control.get_attribute("value") or "").strip()
+        except Exception:
+            continue
+        if label and _SUBMIT_PATTERNS.search(label):
+            control.click()
+            page.wait_for_timeout(3000)
+            return True
+    return False
+
+
 def fill_application_form(
     url: str,
     *,
@@ -332,10 +573,16 @@ def fill_application_form(
     timeout_ms: int = 45_000,
     company: str = "",
     cv_pdf_path: str | None = None,
+    submit: bool = False,
+    screenshot_path: str | None = None,
 ) -> dict[str, Any]:
     """
     Open job URL and fill known fields from profile.yml.
-    Returns a report dict; submit_blocked is always True.
+
+    Returns a report dict. ``submit_blocked`` stays True unless the caller
+    passed ``submit=True`` and the click actually landed — only
+    ``apply/submit.py`` does that, and only for an approved job with a tailored
+    CV and cover letter behind it.
     """
     from apply.ats_strategies import fill_ats_fields, resolve_resume_pdf, upload_resume
 
@@ -386,6 +633,10 @@ def fill_application_form(
                 # Custom ATS questions (CTC, notice period, website, …) are
                 # matched by visible label, not name/id — run on every page.
                 ("labels", lambda: _fill_by_labels(page, profile, report)),
+                # Last: the posting's own screening questions, which are the
+                # ones that actually block submission on Greenhouse.
+                ("screening", lambda: _answer_screening_questions(
+                    page, profile, report, _cv_text())),
             ):
                 try:
                     fn()
@@ -431,6 +682,29 @@ def fill_application_form(
 
             report["ready_for_user_review"] = len(report["filled"]) > 0
             report["form_detected"] = _application_form_present(page)
+
+            if submit:
+                # Photograph before clicking: afterwards the page is a
+                # confirmation or an error, and neither shows what was actually
+                # entered — which is the thing there is otherwise no record of.
+                if screenshot_path:
+                    try:
+                        page.screenshot(path=screenshot_path, full_page=True)
+                        report["screenshot"] = screenshot_path
+                    except Exception as exc:
+                        logger.warning("submission screenshot failed: %s", exc)
+                        report["errors"].append(f"screenshot: {exc}")
+                if report.get("screenshot") or not screenshot_path:
+                    try:
+                        report["submitted"] = _click_submit_control(page)
+                        report["submit_blocked"] = not report["submitted"]
+                    except Exception as exc:
+                        logger.warning("submit click failed: %s", exc)
+                        report["errors"].append(f"submit: {exc}")
+                else:
+                    # No photograph means no record of what was sent, and that
+                    # is the one thing auto-apply must not do quietly.
+                    report["errors"].append("submit skipped: no screenshot captured")
             if not headless:
                 if report["filled"]:
                     report["message"] = "Browser open — review fields and click Submit yourself."
@@ -455,8 +729,18 @@ def fill_application_form(
     return report
 
 
-def apply_assist_for_job(job_id: str, *, headless: bool = True) -> dict[str, Any]:
-    """Load job from SQLite, verify approved pipeline, run fill (no submit)."""
+def apply_assist_for_job(
+    job_id: str,
+    *,
+    headless: bool = True,
+    submit: bool = False,
+    screenshot_path: str | None = None,
+) -> dict[str, Any]:
+    """Load job from SQLite, verify approved pipeline, run fill.
+
+    ``submit`` defaults False: this is the manual assist path, which stops at a
+    filled form. ``apply/submit.py`` passes True after its own checks.
+    """
     from store.status import StatusError, get_pipeline_row, validate_job_id
     from store import db as store
 
@@ -469,14 +753,21 @@ def apply_assist_for_job(job_id: str, *, headless: bool = True) -> dict[str, Any
 
     with store.db() as conn:
         row = conn.execute(
-            "SELECT url, company, title, source FROM jobs WHERE id = ?", (jid,)
+            "SELECT url, company, title, source, metadata_json FROM jobs WHERE id = ?",
+            (jid,),
         ).fetchone()
     if not row or not row["url"]:
         raise ValueError(f"Job {jid} has no URL")
 
-    from apply.channels import LINK_ONLY_MESSAGE, NotFillableError, is_link_only
+    from apply.channels import (
+        LINK_ONLY_MESSAGE, NotFillableError, application_url, is_link_only,
+    )
 
-    if is_link_only(row["url"], str(row["source"] or "")):
+    # Aggregators list a job under their own address and carry the employer's
+    # real application link alongside it. Filling the listing page fills
+    # nothing, so prefer the employer's link whenever the source gave us one.
+    target_url = application_url(row)
+    if is_link_only(target_url, str(row["source"] or "")):
         raise NotFillableError(LINK_ONLY_MESSAGE)
 
     from apply.ats_strategies import resolve_resume_pdf
@@ -484,7 +775,7 @@ def apply_assist_for_job(job_id: str, *, headless: bool = True) -> dict[str, Any
 
     company = str(row["company"] or "")
     job_payload = {
-        "url": row["url"],
+        "url": target_url,
         "company": company,
         "title": row["title"] or "",
         "jd_snippet": "",
@@ -520,10 +811,12 @@ def apply_assist_for_job(job_id: str, *, headless: bool = True) -> dict[str, Any
             logger.debug("CV PDF generation skipped: %s", exc)
 
     report = fill_application_form(
-        row["url"],
+        target_url,
         headless=headless,
         company=company,
         cv_pdf_path=cv_pdf,
+        submit=submit,
+        screenshot_path=screenshot_path,
     )
     report["job_id"] = jid
     report["company"] = row["company"]
