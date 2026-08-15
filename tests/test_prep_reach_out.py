@@ -138,3 +138,138 @@ def test_build_reach_out_in_prep_bundle(monkeypatch):
     assert any(c.get("email") == "pat@acme.com" for c in ro["contacts"])
     assert "outreach_draft" in ro
     assert "do not scrape" in (ro.get("disclaimer") or "").lower() or "LinkedIn" in ro["disclaimer"]
+
+
+# ── Names that are not people ────────────────────────────────────────────────
+#
+# Job descriptions are scraped whole, so they carry the page furniture around
+# the posting: nav bars, CTA buttons, section headings. "Talk to Us" is a
+# button, and the words after it are the page's own headings — which is how a
+# real pipeline ended up storing a contact called "Us Engineering Platform
+# Engineer" and drafting outreach to it.
+
+
+def test_cta_button_followed_by_headings_is_not_a_contact():
+    from prep.reach_out import extract_contacts_from_text
+
+    # Verbatim from a scraped XCaliber Health posting.
+    jd = (
+        "ctive on AI's real impact in clinical practice. Watch now → Talk to Us "
+        "Engineering Platform Engineer Remote, Bangalore Apply for this Job "
+        "Location: While the role is remote-friendly, candidates are expected..."
+    )
+
+    names = {c.get("name") for c in extract_contacts_from_text(jd, company="XCaliber Health")}
+
+    assert "Us Engineering Platform Engineer" not in names
+    assert not any((n or "").lower().startswith("us ") for n in names)
+
+
+def test_a_department_is_not_a_person():
+    from prep.reach_out import extract_contacts_from_text
+
+    jd = "Questions? Email: Sales for more information about the team."
+
+    names = {(c.get("name") or "").lower() for c in extract_contacts_from_text(jd, company="Zyris AI")}
+
+    assert "sales" not in names
+
+
+@pytest.mark.parametrize(
+    "junk",
+    [
+        "Us Engineering Platform Engineer",
+        "Our Team",
+        "The Hiring Team",
+        "Engineering",
+        "Platform Engineer",
+        "Talent Acquisition",
+        "Customer Support",
+        "Apply Now",
+    ],
+)
+def test_page_furniture_is_rejected_as_a_name(junk):
+    from prep.reach_out import _clean_name
+
+    assert _clean_name(junk) == "", junk
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["Jordan Lee", "Sam Patel", "Priya Raman", "Mary-Jane O'Brien", "Jean-Luc Picard"],
+)
+def test_real_names_still_pass(name):
+    from prep.reach_out import _clean_name
+
+    # The fix must not be so eager that it drops the people we want.
+    assert _clean_name(name) == name, name
+
+
+def test_a_name_is_not_four_words_long():
+    from prep.reach_out import _clean_name
+
+    # Four capitalised words in a row is almost always a heading, not a person.
+    assert _clean_name("Alpha Beta Gamma Delta") == ""
+
+
+# ── Addresses that must never receive job outreach ───────────────────────────
+
+
+def test_accommodations_inbox_is_not_an_outreach_target():
+    from prep.reach_out import extract_contacts_from_text
+
+    # Real address from a Harvey posting. That inbox exists so candidates with
+    # disabilities can request accommodations; sending a pitch there is both
+    # useless and inappropriate.
+    jd = (
+        "We are hiring an SRE. If you need accommodations during the process, "
+        "email accommodations@harvey.ai and we will help."
+    )
+
+    emails = {c.get("email", "").lower() for c in extract_contacts_from_text(jd, company="Harvey")}
+
+    assert "accommodations@harvey.ai" not in emails
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "accessibility@acme.com",
+        "privacy@acme.com",
+        "legal@acme.com",
+        "security@acme.com",
+        "abuse@acme.com",
+        "unsubscribe@acme.com",
+    ],
+)
+def test_functional_inboxes_are_not_hiring_contacts(address):
+    from prep.reach_out import extract_contacts_from_text
+
+    contacts = extract_contacts_from_text(f"Questions go to {address} thanks.", company="Acme")
+
+    assert not any(c.get("email", "").lower() == address for c in contacts)
+
+
+@pytest.mark.parametrize(
+    "placeholder",
+    ["name@cvent.com", "firstname.lastname@acme.com", "yourname@acme.com",
+     "example@acme.com", "email@acme.com"],
+)
+def test_placeholder_addresses_are_not_real_contacts(placeholder):
+    from prep.reach_out import extract_contacts_from_text
+
+    # JDs print these as templates ("write to name@company.com"). They are not
+    # deliverable and writing to them looks careless.
+    contacts = extract_contacts_from_text(f"Reach us at {placeholder}", company="Acme")
+
+    assert not any(c.get("email", "").lower() == placeholder for c in contacts)
+
+
+def test_a_real_person_address_still_survives():
+    from prep.reach_out import extract_contacts_from_text
+
+    jd = "For questions contact asha.menon@example.com about the role."
+
+    emails = {c.get("email", "").lower() for c in extract_contacts_from_text(jd, company="Example Health")}
+
+    assert "asha.menon@example.com" in emails

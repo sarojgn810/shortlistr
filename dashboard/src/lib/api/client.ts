@@ -583,8 +583,95 @@ export interface ChatResponse {
 }
 
 
+/** One job awaiting a decision, with the evidence behind its rank. */
+export interface ReviewItem {
+  job_id: string;
+  company: string;
+  title: string;
+  location: string;
+  url: string;
+  status: string;
+  /** Derived from met/total, not the model's own number. */
+  score: number;
+  met: number;
+  total: number;
+  /** The requirements the CV does not answer — what a cover letter must address. */
+  unmet: string[];
+  summary: string;
+}
+
+export interface ReviewQueue {
+  items: ReviewItem[];
+  /** Evaluated before requirements were recorded, so not rankable yet. */
+  pending_reevaluation: number;
+  total: number;
+}
+
+/** A drafted message and the contact it is for. Never sent by the app. */
+export interface OutreachDraft {
+  ok: boolean;
+  contact: { full_name?: string; title?: string; linkedin_url?: string } | null;
+  email?: string;
+  /** False when the address is a guess from the company's naming pattern. */
+  email_verified?: boolean;
+  draft: string;
+  /** Why this contact was chosen — or why none was. Shown either way. */
+  reason: string;
+}
+
+/** Whether a job can be sent unattended, and what is missing if not. */
+export interface ApplyReadiness {
+  ok: boolean;
+  status: string | null;
+  /** Written to be shown to the user — says what to do, not just that it failed. */
+  reason: string;
+}
+
+export interface ScheduledSubmission {
+  scheduled: boolean;
+  reason: string;
+  job_id?: string;
+  submit_after?: number;
+  seconds_left?: number;
+}
+
+export interface PendingSubmission {
+  job_id: string;
+  submit_after: number;
+  seconds_left: number;
+}
+
+export interface RescoreReport {
+  rescored: number;
+  skipped: number;
+  total: number;
+  top_band_before: number;
+  top_band_after: number;
+  dry_run: boolean;
+}
+
 export const api = {
   health: () => request<HealthResponse>("/health"),
+
+  reviewQueue: (limit = 50) => request<ReviewQueue>(`/review/queue?limit=${limit}`),
+
+  outreachDraft: (jobId: string) => request<OutreachDraft>(`/jobs/${jobId}/outreach/draft`),
+
+  applyReadiness: (jobId: string) => request<ApplyReadiness>(`/apply/readiness/${jobId}`),
+  applySchedule: (jobId: string, delaySeconds = 60) =>
+    request<ScheduledSubmission>(
+      `/apply/schedule/${jobId}?delay_seconds=${delaySeconds}`,
+      { method: "POST" },
+    ),
+  applyCancel: (jobId: string) =>
+    request<{ cancelled: boolean }>(`/apply/schedule/${jobId}`, { method: "DELETE" }),
+  applyPending: () => request<{ pending: PendingSubmission[] }>("/apply/pending"),
+
+  reviewReevaluate: (limit = 200) =>
+    request<{ enqueued: number }>(`/review/reevaluate?limit=${limit}`, { method: "POST" }),
+  rescoreEvaluations: (dryRun = false) =>
+    request<RescoreReport>(`/evaluations/rescore?dry_run=${dryRun}`, { method: "POST" }),
+
   sendChat: (body: {
     message?: string;
     history?: ChatTurn[];
