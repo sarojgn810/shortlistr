@@ -51,3 +51,5 @@ scale (semantic search across many entries, cross-project memory), layer an engi
    production agents.
 
 Until then, the markdown loop is the system — it already gives us retrieve/generate/store.
+
+<!-- CI baseline probe: temporary, do not merge. -->
