@@ -30,8 +30,13 @@ def _verify_sqlite(errors: list, warnings: list) -> None:
     try:
         sys.path.insert(0, os.path.join(SHORTLISTR_ROOT, "automation"))
         from store import db as store
+        from store.status import PIPELINE_STATUSES
 
         store.init_db()
+        # Every query belongs inside the `with`: store.db() closes the connection
+        # on exit, so a query below it raises "Cannot operate on a closed
+        # database" and the except at the end swallows it as a skipped-check
+        # warning. The status and receipts checks sat there and never ran.
         with store.db() as conn:
             jobs = conn.execute("SELECT COUNT(*) AS c FROM jobs").fetchone()["c"]
             pending = conn.execute(
@@ -43,24 +48,22 @@ def _verify_sqlite(errors: list, warnings: list) -> None:
                 LEFT JOIN jobs j ON j.id = p.job_id WHERE j.id IS NULL
                 """
             ).fetchone()["c"]
+            bad_pipe = conn.execute(
+                """
+                SELECT COUNT(*) AS c FROM pipeline
+                WHERE status NOT IN ({})
+                """.format(",".join("?" * len(PIPELINE_STATUSES))),
+                tuple(PIPELINE_STATUSES),
+            ).fetchone()["c"]
+            receipts = conn.execute(
+                "SELECT COUNT(*) AS c FROM application_receipts"
+            ).fetchone()["c"]
+
         print(f"✅ SQLite store: {jobs} jobs, {pending} pending pipeline")
         if orphan:
             _error(f"SQLite: {orphan} pipeline rows without matching jobs", errors)
-
-        from store.status import PIPELINE_STATUSES
-        bad_pipe = conn.execute(
-            """
-            SELECT COUNT(*) AS c FROM pipeline
-            WHERE status NOT IN ({})
-            """.format(",".join("?" * len(PIPELINE_STATUSES))),
-            tuple(PIPELINE_STATUSES),
-        ).fetchone()["c"]
         if bad_pipe:
             _error(f"SQLite: {bad_pipe} pipeline rows with invalid status", errors)
-
-        receipts = conn.execute(
-            "SELECT COUNT(*) AS c FROM application_receipts"
-        ).fetchone()["c"]
         print(f"✅ SQLite receipts: {receipts}")
     except Exception as e:
         _warn(f"SQLite check skipped: {e}", warnings)
