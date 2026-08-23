@@ -11,6 +11,7 @@ import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AUTOMATION = os.path.join(ROOT, "automation")
+sys.path.insert(0, AUTOMATION)
 
 
 def _run(cmd: list[str], cwd: str | None = None) -> tuple[int, str]:
