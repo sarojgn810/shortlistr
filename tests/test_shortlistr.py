@@ -11,6 +11,10 @@ import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AUTOMATION = os.path.join(ROOT, "automation")
+# At import, not inside a test: conftest's autouse fixture imports `config`
+# first, and the repo-root `config/` directory shadows automation/config.py
+# unless automation/ is already on the path.
+sys.path.insert(0, AUTOMATION)
 
 
 def _run(cmd: list[str], cwd: str | None = None) -> tuple[int, str]:
@@ -189,3 +193,66 @@ def test_no_node_mjs_in_repo():
         if name.endswith(".mjs"):
             pytest.fail(f"Node script still present: {name}")
     assert not os.path.exists(os.path.join(ROOT, "package.json"))
+
+
+def _seed_store_for_verify(monkeypatch, tmp_path):
+    """A real initialized store at <root>/data/shortlistr.db, with the module
+    attributes _verify_sqlite reads pinned at it.
+
+    SHORTLISTR_ROOT and DB_PATH are both snapshotted at import, so setting an
+    env var here would leave the check pointing at the live database.
+    """
+    import store.db as db_mod
+    from tracker_tools import verify_pipeline
+
+    data = tmp_path / "data"
+    data.mkdir()
+    monkeypatch.setattr(db_mod, "DB_PATH", str(data / "shortlistr.db"))
+    monkeypatch.setattr(db_mod, "LEGACY_DB_PATH", str(data / "autojob.db"))
+    monkeypatch.setattr(verify_pipeline, "SHORTLISTR_ROOT", str(tmp_path))
+    db_mod.init_db()
+    return db_mod, verify_pipeline
+
+
+def test_verify_sqlite_counts_receipts_without_warning(monkeypatch, tmp_path, capsys):
+    """The receipts count and the status check ran after the `with store.db()`
+    block had closed the connection, so both raised and were swallowed as a
+    "SQLite check skipped" warning. `make verify` never validated either."""
+    db_mod, verify_pipeline = _seed_store_for_verify(monkeypatch, tmp_path)
+    with db_mod.db() as conn:
+        conn.execute(
+            "INSERT INTO jobs (id, url, source, title) "
+            "VALUES ('j1', 'u1', 'test', 'SRE')"
+        )
+        conn.execute("INSERT INTO pipeline (job_id, status) VALUES ('j1', 'submitted')")
+        conn.execute(
+            "INSERT INTO application_receipts (job_id, channel) VALUES ('j1', 'email')"
+        )
+
+    errors: list[str] = []
+    warnings: list[str] = []
+    verify_pipeline._verify_sqlite(errors, warnings)
+    out = capsys.readouterr().out
+
+    assert warnings == []
+    assert errors == []
+    assert "SQLite receipts: 1" in out
+
+
+def test_verify_sqlite_flags_invalid_pipeline_status(monkeypatch, tmp_path):
+    """pipeline.status has no CHECK constraint, so this check is the only thing
+    standing between a typo'd status and a job stuck outside the state machine."""
+    db_mod, verify_pipeline = _seed_store_for_verify(monkeypatch, tmp_path)
+    with db_mod.db() as conn:
+        conn.execute(
+            "INSERT INTO jobs (id, url, source, title) "
+            "VALUES ('j1', 'u1', 'test', 'SRE')"
+        )
+        conn.execute("INSERT INTO pipeline (job_id, status) VALUES ('j1', 'aproved')")
+
+    errors: list[str] = []
+    warnings: list[str] = []
+    verify_pipeline._verify_sqlite(errors, warnings)
+
+    assert warnings == []
+    assert any("invalid status" in e for e in errors), errors
