@@ -160,6 +160,11 @@ sources:
     # - ziprecruiter     # rental
     naukri_actor: "valig/naukri-jobs-scraper"
     linkedin_actor: "valig/linkedin-jobs-scraper"
+    # Optional. Leave the line above to keep valig/linkedin-jobs-scraper.
+    # Set linkedin_actor, or SHORTLISTR_LINKEDIN_JOBS_ACTOR, to
+    # johnvc/linkedin-jobs-api to send keyword, location, and maxJobs.
+    # https://apify.com/johnvc/linkedin-jobs-api
+    # https://alphaosint.com/
     indeed_actor: "valig/indeed-jobs-scraper"
     limit: 40
     max_pairs: 1

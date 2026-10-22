@@ -6,8 +6,16 @@ Workday needs per-company board URLs and is left for a later pass.
 
 from __future__ import annotations
 
+import os
 from typing import Any, Callable
 from urllib.parse import quote_plus
+
+from sources.linkedin_jobs_adapter import (
+    OPTIONAL_LINKEDIN_JOBS_ACTOR,
+    LINKEDIN_JOBS_ACTOR_ENV,
+    optional_linkedin_jobs_input,
+    resolve_linkedin_actor,
+)
 
 # Board id → display source label + default actor + input builder.
 # Input builders receive (title, location, *, limit, experience, wants_remote, cfg).
@@ -49,6 +57,15 @@ def _linkedin_input(
     wants_remote: bool,
     cfg: dict[str, Any],
 ) -> dict[str, Any]:
+    actor = resolve_linkedin_actor(cfg, os.environ.get(LINKEDIN_JOBS_ACTOR_ENV))
+    if actor == OPTIONAL_LINKEDIN_JOBS_ACTOR:
+        del experience
+        return optional_linkedin_jobs_input(
+            title,
+            location,
+            limit=limit,
+            wants_remote=wants_remote,
+        )
     # If the profile wants both a city and remote, do not remote-only filter —
     # that dropped Bengaluru onsite LinkedIn roles while Remote was preferred.
     loc = (location or "").strip()

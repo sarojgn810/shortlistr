@@ -9,6 +9,7 @@ boards the free APIs miss (Naukri captcha, LinkedIn, Indeed, Dice, …).
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
 from urllib.parse import urlparse
@@ -17,6 +18,12 @@ from typing import Any
 import config as _cfg
 from models.job import JobRecord
 from sources.apify_boards import BOARD_REGISTRY, BOARD_SKIPPED, DEFAULT_BOARDS
+from sources.linkedin_jobs_adapter import (
+    LINKEDIN_JOBS_ACTOR_ENV,
+    OPTIONAL_LINKEDIN_JOBS_ACTOR,
+    accept_linkedin_job_items,
+    resolve_linkedin_actor,
+)
 from sources.apify_client import get_apify_token, run_actor
 from sources.base import FetchStats, SourceAdapter, SourceHealth
 
@@ -401,7 +408,10 @@ class ApifyAdapter(SourceAdapter):
         # same single query on every board.
         for board_index, board_id in enumerate(boards):
             spec = BOARD_REGISTRY[board_id]
-            actor = str(cfg.get(f"{board_id}_actor") or spec["actor"])
+            if board_id == "linkedin":
+                actor = resolve_linkedin_actor(cfg, os.environ.get(LINKEDIN_JOBS_ACTOR_ENV))
+            else:
+                actor = str(cfg.get(f"{board_id}_actor") or spec["actor"])
             label = str(spec["label"])
             build_input = spec["input"]
             offset = (board_index * max_pairs) % len(pair_pool)
@@ -422,6 +432,8 @@ class ApifyAdapter(SourceAdapter):
                         token=token,
                         timeout_secs=timeout,
                     )
+                    if actor == OPTIONAL_LINKEDIN_JOBS_ACTOR:
+                        items = accept_linkedin_job_items(items)
                     stats.raw_count += len(items)
                     for item in items:
                         if not isinstance(item, dict):
